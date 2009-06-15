@@ -34,9 +34,10 @@
 #define GEN_HELPER 1
 #include "helpers.h"
 
+#define ENABLE_ARCH_5     arm_feature(env, ARM_FEATURE_V5)
 #define ENABLE_ARCH_5J    0
 #define ENABLE_ARCH_6     arm_feature(env, ARM_FEATURE_V6)
-#define ENABLE_ARCH_6K   arm_feature(env, ARM_FEATURE_V6K)
+#define ENABLE_ARCH_6K    arm_feature(env, ARM_FEATURE_V6K)
 #define ENABLE_ARCH_6T2   arm_feature(env, ARM_FEATURE_THUMB2)
 #define ENABLE_ARCH_7     arm_feature(env, ARM_FEATURE_V7)
 
@@ -2587,8 +2588,10 @@ static int disas_cp15_insn(CPUState *env, DisasContext *s, uint32_t insn)
     TCGv tmp;
 
     /* M profile cores use memory mapped registers instead of cp15.  */
-    if (arm_feature(env, ARM_FEATURE_M))
-	return 1;
+    if (arm_feature(env, ARM_FEATURE_M) ||
+        !arm_feature(env, ARM_FEATURE_CP15)) {
+	    return 1;
+    }
 
     if ((insn & (1 << 25)) == 0) {
         if (insn & (1 << 20)) {
@@ -5745,9 +5748,10 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                 goto illegal_op;
             return;
         }
-        if ((insn & 0x0d70f000) == 0x0550f000)
+        if ((insn & 0x0d70f000) == 0x0550f000) {
+            ARCH(5);
             return; /* PLD */
-        else if ((insn & 0x0ffffdff) == 0x01010000) {
+        } else if ((insn & 0x0ffffdff) == 0x01010000) {
             ARCH(6);
             /* setend */
             if (insn & (1 << 9)) {
@@ -5859,7 +5863,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
         } else if ((insn & 0x0e000000) == 0x0a000000) {
             /* branch link and change to thumb (blx <offset>) */
             int32_t offset;
-
+            ARCH(5);
             val = (uint32_t)s->pc;
             tmp = new_tmp();
             tcg_gen_movi_i32(tmp, val);
@@ -5881,8 +5885,10 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
             }
         } else if ((insn & 0x0fe00000) == 0x0c400000) {
             /* Coprocessor double register transfer.  */
+            ARCH(5);
         } else if ((insn & 0x0f000010) == 0x0e000010) {
             /* Additional coprocessor register transfer.  */
+            ARCH(5);
         } else if ((insn & 0x0ff10020) == 0x01000000) {
             uint32_t mask;
             uint32_t val;
@@ -6008,7 +6014,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
         case 0x3:
             if (op1 != 1)
               goto illegal_op;
-
+            ARCH(5);
             /* branch link/exchange thumb (blx) */
             tmp = load_reg(s, rm);
             tmp2 = new_tmp();
@@ -6031,6 +6037,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
             store_reg(s, rd, tmp);
             break;
         case 7: /* bkpt */
+            ARCH(5);
             gen_set_condexec(s);
             gen_set_pc_im(s->pc - 4);
             gen_exception(EXCP_BKPT);
@@ -6767,7 +6774,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
             }
             if (insn & (1 << 20)) {
                 /* Complete the load.  */
-                if (rd == 15)
+                if (rd == 15 && ENABLE_ARCH_5)
                     gen_bx(s, tmp);
                 else
                     store_reg(s, rd, tmp);
@@ -6777,6 +6784,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
         case 0x09:
             {
                 int j, n, user, loaded_base;
+                int crement = 0;
                 TCGv loaded_var;
                 /* load/store multiple words */
                 /* XXX: store correct base if write back */
@@ -6817,6 +6825,38 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                         tcg_gen_addi_i32(addr, addr, -((n - 1) * 4));
                     }
                 }
+
+                if (insn & (1 << 21)) {
+                    /* write back */
+                    if (insn & (1 << 23)) {
+                        if (insn & (1 << 24)) {
+                            /* pre increment */
+                        } else {
+                            /* post increment */
+                            crement = 4;
+                        }
+                    } else {
+                        if (insn & (1 << 24)) {
+                            /* pre decrement */
+                            if (n != 1) {
+                                crement = -((n - 1) * 4);
+                            }
+                        } else {
+                            /* post decrement */
+                            crement = -(n * 4);
+                        }
+                    }
+                    if (arm_feature(env, ARM_FEATURE_ABORT_BU)) {
+                        /* base-updated abort model: update base register
+                           before an abort can happen */
+                        crement += (n - 1) * 4;
+                        tmp = new_tmp();
+                        tcg_gen_addi_i32(tmp, addr, crement);
+                        store_reg(s, rn, tmp);
+                    }
+
+                }
+
                 j = 0;
                 for(i=0;i<16;i++) {
                     if (insn & (1 << i)) {
@@ -6824,7 +6864,11 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                             /* load */
                             tmp = gen_ld32(addr, IS_USER(s));
                             if (i == 15) {
-                                gen_bx(s, tmp);
+                                if (ENABLE_ARCH_5) {
+                                    gen_bx(s, tmp);
+                                } else {
+                                    store_reg(s, i, tmp);
+                                }
                             } else if (user) {
                                 gen_helper_set_user_reg(tcg_const_i32(i), tmp);
                                 dead_tmp(tmp);
@@ -6855,25 +6899,8 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                             tcg_gen_addi_i32(addr, addr, 4);
                     }
                 }
-                if (insn & (1 << 21)) {
-                    /* write back */
-                    if (insn & (1 << 23)) {
-                        if (insn & (1 << 24)) {
-                            /* pre increment */
-                        } else {
-                            /* post increment */
-                            tcg_gen_addi_i32(addr, addr, 4);
-                        }
-                    } else {
-                        if (insn & (1 << 24)) {
-                            /* pre decrement */
-                            if (n != 1)
-                                tcg_gen_addi_i32(addr, addr, -((n - 1) * 4));
-                        } else {
-                            /* post decrement */
-                            tcg_gen_addi_i32(addr, addr, -(n * 4));
-                        }
-                    }
+                if (!arm_feature(env, ARM_FEATURE_ABORT_BU) && (insn & (1 << 21))) {
+                    tcg_gen_addi_i32(addr, addr, crement);
                     store_reg(s, rn, addr);
                 } else {
                     dead_tmp(addr);
@@ -7034,6 +7061,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
            16-bit instructions to get correct prefetch abort behavior.  */
         insn = insn_hw1;
         if ((insn & (1 << 12)) == 0) {
+            ARCH(5);
             /* Second half of blx.  */
             offset = ((insn & 0x7ff) << 1);
             tmp = load_reg(s, 14);
@@ -7091,6 +7119,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
             /* Other load/store, table branch.  */
             if (insn & 0x01200000) {
                 /* Load/store doubleword.  */
+                ARCH(5);
                 if (rn == 15) {
                     addr = new_tmp();
                     tcg_gen_movi_i32(addr, s->pc & ~3);
@@ -7304,7 +7333,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                     if (insn & (1 << 20)) {
                         /* Load.  */
                         tmp = gen_ld32(addr, IS_USER(s));
-                        if (i == 15) {
+                        if (i == 15 && ENABLE_ARCH_5) {
                             gen_bx(s, tmp);
                         } else {
                             store_reg(s, i, tmp);
@@ -7643,6 +7672,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                     gen_jmp(s, offset);
                 } else {
                     /* blx */
+                    ARCH(5);
                     offset &= ~(uint32_t)2;
                     gen_bx_im(s, offset);
                 }
@@ -7998,7 +8028,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                 case 2: tmp = gen_ld32(addr, user); break;
                 default: goto illegal_op;
                 }
-                if (rs == 15) {
+                if (rs == 15 && ENABLE_ARCH_5) {
                     gen_bx(s, tmp);
                 } else {
                     store_reg(s, rs, tmp);
@@ -8041,6 +8071,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
     TCGv tmp;
     TCGv tmp2;
     TCGv addr;
+    int crement;
 
     if (s->condexec_mask) {
         cond = s->condexec_cond;
@@ -8162,6 +8193,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             case 3:/* branch [and link] exchange thumb register */
                 tmp = load_reg(s, rm);
                 if (insn & (1 << 7)) {
+                    ARCH(5);
                     val = (uint32_t)s->pc | 1;
                     tmp2 = new_tmp();
                     tcg_gen_movi_i32(tmp2, val);
@@ -8514,8 +8546,13 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             /* write back the new stack pointer */
             store_reg(s, 13, addr);
             /* set the new PC value */
-            if ((insn & 0x0900) == 0x0900)
-                gen_bx(s, tmp);
+            if ((insn & 0x0900) == 0x0900) {
+                if (ENABLE_ARCH_5) {
+                    gen_bx(s, tmp);
+                } else {
+                    store_reg(s, 15, tmp);
+                }
+            }
             break;
 
         case 1: case 3: case 9: case 11: /* czb */
@@ -8604,6 +8641,19 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
         /* load/store multiple */
         rn = (insn >> 8) & 0x7;
         addr = load_reg(s, rn);
+        if (arm_feature(env, ARM_FEATURE_ABORT_BU) && (insn & (1 << rn)) == 0) {
+            /* base-updated abort model: update base register
+               before an abort can happen */
+            crement = 0;
+            for (i = 0; i < 8; i++) {
+                if (insn & (1 << i)) {
+                    crement += 4;
+                }
+            }
+            tmp = new_tmp();
+            tcg_gen_addi_i32(tmp, addr, crement);
+            store_reg(s, rn, tmp);
+        }
         for (i = 0; i < 8; i++) {
             if (insn & (1 << i)) {
                 if (insn & (1 << 11)) {
@@ -8620,7 +8670,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             }
         }
         /* Base register writeback.  */
-        if ((insn & (1 << rn)) == 0) {
+        if (!arm_feature(env, ARM_FEATURE_ABORT_BU) && (insn & (1 << rn)) == 0) {
             store_reg(s, rn, addr);
         } else {
             dead_tmp(addr);

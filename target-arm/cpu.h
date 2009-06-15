@@ -330,6 +330,7 @@ enum arm_features {
     ARM_FEATURE_AUXCR,  /* ARM1026 Auxiliary control register.  */
     ARM_FEATURE_XSCALE, /* Intel XScale extensions.  */
     ARM_FEATURE_IWMMXT, /* Intel iwMMXt extension.  */
+    ARM_FEATURE_V5,
     ARM_FEATURE_V6,
     ARM_FEATURE_V6K,
     ARM_FEATURE_V7,
@@ -340,7 +341,9 @@ enum arm_features {
     ARM_FEATURE_DIV,
     ARM_FEATURE_M, /* Microcontroller profile.  */
     ARM_FEATURE_OMAPCP, /* OMAP specific CP15 ops handling.  */
-    ARM_FEATURE_THUMB2EE
+    ARM_FEATURE_THUMB2EE,
+    ARM_FEATURE_CP15, /* ARM7TDMI, ARM7TDMI-S, ARM7EJ-S, and ARM9TDMI cores do not have a CP15 */
+    ARM_FEATURE_ABORT_BU /* base updated abort model, e.g. ARMxTDMI */
 };
 
 static inline int arm_feature(CPUARMState *env, int feature)
@@ -366,6 +369,7 @@ void cpu_arm_set_cp_io(CPUARMState *env, int cpnum,
 #define IS_M(env) arm_feature(env, ARM_FEATURE_M)
 #define ARM_CPUID(env) (env->cp15.c0_cpuid)
 
+#define ARM_CPUID_ARM7TDMI    0x41807000 /* guess; no CP15 on ARM7TDMI */
 #define ARM_CPUID_ARM1026     0x4106a262
 #define ARM_CPUID_ARM926      0x41069265
 #define ARM_CPUID_ARM946      0x41059461
