@@ -95,6 +95,17 @@ static void at91pes_init(ram_addr_t ram_size,
     sysbus_mmio_map(sysbus_from_qdev(dev), 0, 0xFFFDC000);
     sysbus_connect_irq(sysbus_from_qdev(dev), 0, pic[16]);
 
+    dev = qdev_create(NULL, "gpio,hd44780");
+    qdev_init(dev);
+    for (i = 0; i < 3; i++) {
+        qdev_connect_gpio_out(pioa, 15 - i, qdev_get_gpio_in(dev, 8 + i));
+    }
+    qdev_connect_gpio_out(piob, 28, qdev_get_gpio_in(dev, 11));
+    for (i = 0; i < 4; i++) {
+        qdev_connect_gpio_out(pioa, 5 + i, qdev_get_gpio_in(dev, 4 + i));
+        qdev_connect_gpio_out(dev, 4 + i, qdev_get_gpio_in(pioa, 5 + i));
+    }
+
     dev = qdev_create(NULL, "gpio,keypad");
     qdev_prop_set_ptr(dev, "keys", keys);
     qdev_init(dev);

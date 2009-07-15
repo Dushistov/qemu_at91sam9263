@@ -433,7 +433,7 @@ obj-arm-y += syborg_serial.o syborg_timer.o syborg_pointer.o syborg_rtc.o
 obj-arm-y += syborg_virtio.o
 obj-arm-y += at91_aic.o at91_dbgu.o at91_pio.o at91_pit.o at91_pmc.o at91_rtt.o
 obj-arm-y += at91_rstc.o at91_intor.o at91_tc.o at91_emac.o at91pes.o
-obj-arm-y += gpio_rotary.o gpio_keypad.o
+obj-arm-y += gpio_rotary.o gpio_keypad.o hd44780.o
 
 ifeq ($(TARGET_BASE_ARCH), arm)
 CPPFLAGS += -DHAS_AUDIO
