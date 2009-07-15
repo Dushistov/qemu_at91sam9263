@@ -431,6 +431,7 @@ obj-arm-y += framebuffer.o
 obj-arm-y += syborg.o syborg_fb.o syborg_interrupt.o syborg_keyboard.o
 obj-arm-y += syborg_serial.o syborg_timer.o syborg_pointer.o syborg_rtc.o
 obj-arm-y += syborg_virtio.o
+obj-arm-y += at91_aic.o
 obj-arm-y += gpio_rotary.o gpio_keypad.o
 
 ifeq ($(TARGET_BASE_ARCH), arm)
