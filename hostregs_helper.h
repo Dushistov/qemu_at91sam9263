@@ -48,14 +48,6 @@
 DO_REG(0)
 #endif
 
-#ifdef AREG1
-DO_REG(1)
-#endif
-
-#ifdef AREG2
-DO_REG(2)
-#endif
-
 #undef SAVE_HOST_REGS
 #undef DECLARE_HOST_REGS
 #undef DO_REG
