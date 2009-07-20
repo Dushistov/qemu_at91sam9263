@@ -380,16 +380,6 @@ static inline void gen_logic_CC(TCGv var)
     tcg_gen_st_i32(var, cpu_env, offsetof(CPUState, ZF));
 }
 
-/* T0 += T1 + CF.  */
-static void gen_adc(TCGv t0, TCGv t1)
-{
-    TCGv tmp;
-    tcg_gen_add_i32(t0, t0, t1);
-    tmp = load_cpu_field(CF);
-    tcg_gen_add_i32(t0, t0, tmp);
-    dead_tmp(tmp);
-}
-
 /* dest = T0 + T1 + CF. */
 static void gen_add_carry(TCGv dest, TCGv t0, TCGv t1)
 {
@@ -6995,7 +6985,7 @@ gen_thumb2_data_op(DisasContext *s, int op, int conds, uint32_t shifter_out, TCG
         if (conds)
             gen_helper_adc_cc(t0, t0, t1);
         else
-            gen_adc(t0, t1);
+            gen_add_carry(t0, t0, t1);
         break;
     case 11: /* sbc */
         if (conds)
@@ -8275,7 +8265,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             break;
         case 0x5: /* adc */
             if (s->condexec_mask)
-                gen_adc(tmp, tmp2);
+                gen_add_carry(tmp, tmp, tmp2);
             else
                 gen_helper_adc_cc(tmp, tmp, tmp2);
             break;
