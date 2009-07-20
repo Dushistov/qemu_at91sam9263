@@ -424,21 +424,6 @@ static inline void tcg_gen_bic_i32(TCGv dest, TCGv t0, TCGv t1)
 /* FIXME:  Implement this natively.  */
 #define tcg_gen_abs_i32(t0, t1) gen_helper_abs(t0, t1)
 
-/* FIXME:  Implement this natively.  */
-static void tcg_gen_rori_i32(TCGv t0, TCGv t1, int i)
-{
-    TCGv tmp;
-
-    if (i == 0)
-        return;
-
-    tmp = new_tmp();
-    tcg_gen_shri_i32(tmp, t1, i);
-    tcg_gen_shli_i32(t1, t1, 32 - i);
-    tcg_gen_or_i32(t0, t1, tmp);
-    dead_tmp(tmp);
-}
-
 static void shifter_out_im(TCGv var, int shift)
 {
     TCGv tmp = new_tmp();
@@ -490,7 +475,7 @@ static inline void gen_arm_shift_im(TCGv var, int shiftop, int shift, int flags)
         if (shift != 0) {
             if (flags)
                 shifter_out_im(var, shift - 1);
-            tcg_gen_rori_i32(var, var, shift); break;
+            tcg_gen_rotri_i32(var, var, shift); break;
         } else {
             TCGv tmp = load_cpu_field(CF);
             if (flags)
@@ -6582,7 +6567,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                         /* ??? In many cases it's not neccessary to do a
                            rotate, a shift is sufficient.  */
                         if (shift != 0)
-                            tcg_gen_rori_i32(tmp, tmp, shift * 8);
+                            tcg_gen_rotri_i32(tmp, tmp, shift * 8);
                         op1 = (insn >> 20) & 7;
                         switch (op1) {
                         case 0: gen_sxtb16(tmp);  break;
@@ -7409,7 +7394,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
             /* ??? In many cases it's not neccessary to do a
                rotate, a shift is sufficient.  */
             if (shift != 0)
-                tcg_gen_rori_i32(tmp, tmp, shift * 8);
+                tcg_gen_rotri_i32(tmp, tmp, shift * 8);
             op = (insn >> 20) & 7;
             switch (op) {
             case 0: gen_sxth(tmp);   break;
