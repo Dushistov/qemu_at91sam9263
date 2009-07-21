@@ -288,6 +288,7 @@ struct TCGContext {
     int64_t code_out_len;
     int64_t interm_time;
     int64_t code_time;
+    int64_t const_time;
     int64_t la_time;
     int64_t restore_count;
     int64_t restore_time;

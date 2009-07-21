@@ -1025,7 +1025,183 @@ void tcg_add_target_add_op_defs(const TCGTargetOpDef *tdefs)
 #endif
         tdefs++;
     }
+}
 
+static void tcg_const_analysis(TCGContext *s)
+{
+    int nb_cargs, nb_iargs, nb_oargs, dest, src, src2, del_args, i;
+    TCGArg *args;
+    uint16_t op;
+    uint16_t *opc_ptr;
+    const TCGOpDef *def;
+    uint8_t *const_temps;
+    tcg_target_ulong *temp_values;
+    tcg_target_ulong val;
+    tcg_target_ulong dest_val, src_val, src2_val;
+
+    const_temps = tcg_malloc(s->nb_temps);
+    memset(const_temps, 0, s->nb_temps);
+    temp_values = tcg_malloc(s->nb_temps * sizeof(uint32_t));
+
+    opc_ptr = gen_opc_buf;
+    args = gen_opparam_buf;
+    while (opc_ptr < gen_opc_ptr) {
+        op = *opc_ptr;
+        def = &tcg_op_defs[op];
+        nb_oargs = def->nb_oargs;
+        nb_iargs = def->nb_iargs;
+        nb_cargs = def->nb_cargs;
+        del_args = 0;
+
+        switch(op) {
+        case INDEX_op_movi_i32:
+#if TCG_TARGET_REG_BITS == 64
+        case INDEX_op_movi_i64:
+#endif
+            dest = args[0];
+            val = args[1];
+            const_temps[dest] = 1;
+            temp_values[dest] = val;
+            break;
+        case INDEX_op_mov_i32:
+#if TCG_TARGET_REG_BITS == 64
+        case INDEX_op_mov_i64:
+#endif
+            dest = args[0];
+            src = args[1];
+            const_temps[dest] = const_temps[src];
+            temp_values[dest] = temp_values[src];
+            break;
+#ifdef TCG_TARGET_HAS_not_i32
+        case INDEX_op_not_i32:
+            dest = args[0];
+            src = args[1];
+            if (const_temps[src]) {
+                const_temps[dest] = 1;
+                *opc_ptr = INDEX_op_movi_i32;
+                args[1] = temp_values[dest] = ~temp_values[src] & 0xffffffff;
+            } else {
+                const_temps[dest] = 0;
+            }
+            break;
+#endif
+#ifdef TCG_TARGET_HAS_not_i64
+        case INDEX_op_not_i64:
+            dest = args[0];
+            src = args[1];
+            if (const_temps[src]) {
+                const_temps[dest] = 1;
+                *opc_ptr = INDEX_op_movi_i64;
+                args[1] = temp_values[dest] = ~temp_values[src];
+            } else {
+                const_temps[dest] = 0;
+            }
+            break;
+#endif
+        case INDEX_op_add_i32:
+        case INDEX_op_sub_i32:
+        case INDEX_op_mul_i32:
+        case INDEX_op_and_i32:
+        case INDEX_op_or_i32:
+        case INDEX_op_xor_i32:
+        case INDEX_op_shl_i32:
+        case INDEX_op_shr_i32:
+            dest = args[0];
+            src = args[1];
+            src2 = args[2];
+            if (const_temps[src] && const_temps[src2]) {
+                src_val = temp_values[src];
+                src2_val = temp_values[src2];
+                const_temps[dest] = 1;
+                switch (op) {
+                case INDEX_op_add_i32: dest_val = src_val + src2_val; break;
+                case INDEX_op_sub_i32: dest_val = src_val - src2_val; break;
+                case INDEX_op_mul_i32: dest_val = src_val * src2_val; break;
+                case INDEX_op_and_i32: dest_val = src_val & src2_val; break;
+                case INDEX_op_or_i32: dest_val = src_val | src2_val; break;
+                case INDEX_op_xor_i32: dest_val = src_val ^ src2_val; break;
+                case INDEX_op_shl_i32: dest_val = src_val << src2_val; break;
+                case INDEX_op_shr_i32: dest_val = src_val >> src2_val; break;
+                default: tcg_abort(); return;
+                }
+                *opc_ptr = INDEX_op_movi_i32;
+                args[1] = temp_values[dest] = dest_val & 0xffffffff;
+                del_args = 1;
+            } else {
+                const_temps[dest] = 0;
+            }
+            break;
+#if TCG_TARGET_REG_BITS == 64
+        case INDEX_op_add_i64:
+        case INDEX_op_sub_i64:
+        case INDEX_op_mul_i64:
+        case INDEX_op_and_i64:
+        case INDEX_op_or_i64:
+        case INDEX_op_xor_i64:
+        case INDEX_op_shl_i64:
+        case INDEX_op_shr_i64:
+            dest = args[0];
+            src = args[1];
+            src2 = args[2];
+            if (const_temps[src] && const_temps[src2]) {
+                src_val = temp_values[src];
+                src2_val = temp_values[src2];
+                const_temps[dest] = 1;
+                switch (op) {
+                case INDEX_op_add_i64: dest_val = src_val + src2_val; break;
+                case INDEX_op_sub_i64: dest_val = src_val - src2_val; break;
+                case INDEX_op_mul_i64: dest_val = src_val * src2_val; break;
+                case INDEX_op_and_i64: dest_val = src_val & src2_val; break;
+                case INDEX_op_or_i64: dest_val = src_val | src2_val; break;
+                case INDEX_op_xor_i64: dest_val = src_val ^ src2_val; break;
+                case INDEX_op_shl_i64: dest_val = src_val << src2_val; break;
+                case INDEX_op_shr_i64: dest_val = src_val >> src2_val; break;
+                default: tcg_abort(); return;
+                }
+                *opc_ptr = INDEX_op_movi_i64;
+                args[1] = temp_values[dest] = dest_val;
+                del_args = 1;
+            } else {
+                const_temps[dest] = 0;
+            }
+            break;
+#endif
+        case INDEX_op_call:
+            nb_oargs = args[0] >> 16;
+            nb_iargs = args[0] & 0xffff;
+            nb_cargs = def->nb_cargs;
+            args++;
+            for (i = 0; i < nb_oargs; i++) {
+                const_temps[args[i]] = 0;
+            }
+            break;
+        case INDEX_op_nopn:
+            /* variable number of arguments */
+            nb_cargs = args[0];
+            break;
+        case INDEX_op_set_label:
+            memset(const_temps, 0, s->nb_temps);
+            break;
+        default:
+            if (def->flags & TCG_OPF_BB_END) {
+                memset(const_temps, 0, s->nb_temps);
+            } else {
+                for (i = 0; i < nb_oargs; i++) {
+                    const_temps[args[i]] = 0;
+                }
+            }
+            break;
+        }
+        opc_ptr++;
+        args += nb_iargs + nb_oargs + nb_cargs - del_args;
+        if (del_args > 0) {
+            gen_opparam_ptr -= del_args;
+            memmove(args, args + del_args, (gen_opparam_ptr - args) * sizeof(*args));
+        }
+    }
+
+    if (args != gen_opparam_ptr)
+        tcg_abort();
 }
 
 #ifdef USE_LIVENESS_ANALYSIS
@@ -1896,6 +2072,14 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
 #endif
 
 #ifdef CONFIG_PROFILER
+    s->const_time -= profile_getclock();
+#endif
+    tcg_const_analysis(s);
+#ifdef CONFIG_PROFILER
+    s->const_time += profile_getclock();
+#endif
+
+#ifdef CONFIG_PROFILER
     s->la_time -= profile_getclock();
 #endif
     tcg_liveness_analysis(s);
@@ -2068,6 +2252,8 @@ void tcg_dump_info(FILE *f,
                 (double)s->interm_time / tot * 100.0);
     cpu_fprintf(f, "  gen_code time     %0.1f%%\n", 
                 (double)s->code_time / tot * 100.0);
+    cpu_fprintf(f, "const/code time     %0.1f%%\n", 
+                (double)s->const_time / (s->code_time ? s->code_time : 1) * 100.0);
     cpu_fprintf(f, "liveness/code time  %0.1f%%\n", 
                 (double)s->la_time / (s->code_time ? s->code_time : 1) * 100.0);
     cpu_fprintf(f, "cpu_restore count   %" PRId64 "\n",
