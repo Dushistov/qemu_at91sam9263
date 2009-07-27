@@ -35,14 +35,6 @@ register struct CPUPPCState *env asm(AREG0);
 #include "softmmu_exec.h"
 #endif /* !defined(CONFIG_USER_ONLY) */
 
-static always_inline void env_to_regs (void)
-{
-}
-
-static always_inline void regs_to_env (void)
-{
-}
-
 static always_inline int cpu_has_work(CPUState *env)
 {
     return (msr_ee && (env->interrupt_request & CPU_INTERRUPT_HARD));
