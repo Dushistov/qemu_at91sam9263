@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include "cache-utils.h"
 
 #if defined(_ARCH_PPC)

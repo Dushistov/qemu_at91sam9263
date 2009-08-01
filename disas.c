@@ -284,7 +284,7 @@ void disas(FILE *out, void *code, unsigned long size)
     return;
 #endif
     for (pc = (uintptr_t)code; size > 0; pc += count, size -= count) {
-	fprintf(out, "0x%08Ix:  ", pc);
+	fprintf(out, "0x%08" PRIxPTR ":  ", pc);
 #ifdef __arm__
         /* since data is included in the code, it is better to
            display code data too */

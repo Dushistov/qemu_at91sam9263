@@ -608,7 +608,7 @@ int cpu_exec(CPUState *env1)
                     tb_invalidated_flag = 0;
                 }
 #ifdef CONFIG_DEBUG_EXEC
-                qemu_log_mask(CPU_LOG_EXEC, "Trace 0x%08Ix [" TARGET_FMT_lx "] %s\n",
+                qemu_log_mask(CPU_LOG_EXEC, "Trace 0x%08" PRIxPTR " [" TARGET_FMT_lx "] %s\n",
                              (intptr_t)tb->tc_ptr, tb->pc,
                              lookup_symbol(tb->pc));
 #endif

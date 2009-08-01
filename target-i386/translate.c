@@ -7799,7 +7799,7 @@ void gen_pc_load(CPUState *env, TranslationBlock *tb,
                 qemu_log("0x%04x: " TARGET_FMT_lx "\n", i, gen_opc_pc[i]);
             }
         }
-        qemu_log("spc=0x%08Ix pc_pos=0x%x eip=" TARGET_FMT_lx " cs_base=%x\n",
+        qemu_log("spc=0x%08" PRIxPTR " pc_pos=0x%x eip=" TARGET_FMT_lx " cs_base=%x\n",
                 searched_pc, pc_pos, gen_opc_pc[pc_pos] - tb->cs_base,
                 (uint32_t)tb->cs_base);
     }
