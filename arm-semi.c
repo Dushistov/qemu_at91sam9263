@@ -59,10 +59,6 @@
 #define SYS_HEAPINFO    0x16
 #define SYS_EXIT        0x18
 
-#ifndef O_BINARY
-#define O_BINARY 0
-#endif
-
 #define GDB_O_RDONLY  0x000
 #define GDB_O_WRONLY  0x001
 #define GDB_O_RDWR    0x002
