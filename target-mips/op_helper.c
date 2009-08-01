@@ -57,7 +57,7 @@ void helper_interrupt_restart (void)
 static void do_restore_state (void *pc_ptr)
 {
     TranslationBlock *tb;
-    unsigned long pc = (unsigned long) pc_ptr;
+    uintptr_t pc = (uintptr_t) pc_ptr;
     
     tb = tb_find_pc (pc);
     if (tb) {
