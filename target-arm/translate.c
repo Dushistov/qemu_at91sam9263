@@ -3198,7 +3198,7 @@ static inline void gen_goto_tb(DisasContext *s, int n, uint32_t dest)
     if ((tb->pc & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK)) {
         tcg_gen_goto_tb(n);
         gen_set_pc_im(dest);
-        tcg_gen_exit_tb((long)tb + n);
+        tcg_gen_exit_tb((intptr_t)tb + n);
     } else {
         gen_set_pc_im(dest);
         tcg_gen_exit_tb(0);
@@ -9027,7 +9027,7 @@ void cpu_dump_state(CPUState *env, FILE *f,
 }
 
 void gen_pc_load(CPUState *env, TranslationBlock *tb,
-                unsigned long searched_pc, int pc_pos, void *puc)
+                uintptr_t searched_pc, int pc_pos, void *puc)
 {
     env->regs[15] = gen_opc_pc[pc_pos];
 }

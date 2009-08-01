@@ -765,8 +765,9 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed,
     }
 
 #ifdef DEBUG_ISOCH
-    printf("so 0x%.8x eo 0x%.8x\nsa 0x%.8x ea 0x%.8x\ndir %s len %zu ret %d\n",
-           start_offset, end_offset, start_addr, end_addr, str, len, ret);
+    printf("so 0x%.8x eo 0x%.8x\nsa 0x%.8x ea 0x%.8x\ndir %s len %" PRIuPTR
+           " ret %d\n", start_offset, end_offset, start_addr, end_addr, str,
+           len, ret);
 #endif
 
     /* Writeback */
@@ -783,7 +784,7 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed,
         OHCI_SET_BM(iso_td.offset[relative_frame_number], TD_PSW_SIZE, 0);
     } else {
         if (ret > (ssize_t) len) {
-            printf("usb-ohci: DataOverrun %d > %zu\n", ret, len);
+            printf("usb-ohci: DataOverrun %d > %" PRIuPTR "\n", ret, len);
             OHCI_SET_BM(iso_td.offset[relative_frame_number], TD_PSW_CC,
                         OHCI_CC_DATAOVERRUN);
             OHCI_SET_BM(iso_td.offset[relative_frame_number], TD_PSW_SIZE,

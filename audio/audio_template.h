@@ -350,7 +350,7 @@ static SW *glue (audio_pcm_create_voice_pair_, TYPE) (
 
     sw = audio_calloc (AUDIO_FUNC, 1, sizeof (*sw));
     if (!sw) {
-        dolog ("Could not allocate soft voice `%s' (%zu bytes)\n",
+        dolog ("Could not allocate soft voice `%s' (%" PRIuPTR " bytes)\n",
                sw_name ? sw_name : "unknown", sizeof (*sw));
         goto err1;
     }

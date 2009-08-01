@@ -192,7 +192,8 @@ void *audio_calloc (const char *funcname, int nmemb, size_t size)
     if (audio_bug ("audio_calloc", cond)) {
         AUD_log (NULL, "%s passed invalid arguments to audio_calloc\n",
                  funcname);
-        AUD_log (NULL, "nmemb=%d size=%zu (len=%zu)\n", nmemb, size, len);
+        AUD_log (NULL, "nmemb=%d size=%" PRIuPTR " (len=%" PRIuPTR ")\n",
+                 nmemb, size, len);
         return NULL;
     }
 
@@ -804,8 +805,8 @@ static int audio_attach_capture (HWVoiceOut *hw)
 
         sc = audio_calloc (AUDIO_FUNC, 1, sizeof (*sc));
         if (!sc) {
-            dolog ("Could not allocate soft capture voice (%zu bytes)\n",
-                   sizeof (*sc));
+            dolog ("Could not allocate soft capture voice (%" PRIuPTR
+                   " bytes)\n", sizeof (*sc));
             return -1;
         }
 
@@ -1830,8 +1831,8 @@ CaptureVoiceOut *AUD_add_capture (
 
     cb = audio_calloc (AUDIO_FUNC, 1, sizeof (*cb));
     if (!cb) {
-        dolog ("Could not allocate capture callback information, size %zu\n",
-               sizeof (*cb));
+        dolog ("Could not allocate capture callback information, size %"
+               PRIuPTR "\n", sizeof (*cb));
         goto err0;
     }
     cb->ops = *ops;
@@ -1848,7 +1849,7 @@ CaptureVoiceOut *AUD_add_capture (
 
         cap = audio_calloc (AUDIO_FUNC, 1, sizeof (*cap));
         if (!cap) {
-            dolog ("Could not allocate capture voice, size %zu\n",
+            dolog ("Could not allocate capture voice, size %" PRIuPTR "\n",
                    sizeof (*cap));
             goto err1;
         }

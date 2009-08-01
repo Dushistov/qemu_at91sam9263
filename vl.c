@@ -1455,7 +1455,7 @@ static int win32_start_timer(struct qemu_alarm_timer *t)
     data->timerId = timeSetEvent(1,         // interval (ms)
                         data->period,       // resolution
                         host_alarm_handler, // function
-                        (DWORD)t,           // parameter
+                        (DWORD_PTR)t,       // parameter
                         flags);
 
     if (!data->timerId) {
@@ -1492,7 +1492,7 @@ static void win32_rearm_timer(struct qemu_alarm_timer *t)
     data->timerId = timeSetEvent(1,
                         data->period,
                         host_alarm_handler,
-                        (DWORD)t,
+                        (DWORD_PTR)t,
                         TIME_ONESHOT | TIME_PERIODIC);
 
     if (!data->timerId) {
@@ -4607,17 +4607,38 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
 
 int qemu_uuid_parse(const char *str, uint8_t *uuid)
 {
-    int ret;
+    int pos = 0;
+    uint8_t *uuid_ptr = uuid;
 
-    if(strlen(str) != 36)
+    if(strlen(str) != 36) {
         return -1;
+    }
 
-    ret = sscanf(str, UUID_FMT, &uuid[0], &uuid[1], &uuid[2], &uuid[3],
-            &uuid[4], &uuid[5], &uuid[6], &uuid[7], &uuid[8], &uuid[9],
-            &uuid[10], &uuid[11], &uuid[12], &uuid[13], &uuid[14], &uuid[15]);
-
-    if(ret != 16)
-        return -1;
+    while (pos < 36) {
+        if (pos == 8 || pos == 13 || pos == 18 || pos == 23) {
+            if (str[pos] != '-') {
+                return -1;
+            }
+            pos++;
+        } else {
+            if (str[pos] >= '0' && str[pos] <= '9') {
+                *uuid_ptr = (str[pos] - '0') << 4;
+            } else if (str[pos] >= 'a' && str[pos] <= 'f') {
+                *uuid_ptr = (str[pos] - 'a' + 0xa) << 4;
+            } else if (str[pos] >= 'A' && str[pos] <= 'F') {
+                *uuid_ptr = (str[pos] - 'A' + 0xa) << 4;
+            }
+            pos++;
+            if (str[pos] >= '0' && str[pos] <= '9') {
+                *uuid_ptr += str[pos] - '0';
+            } else if (str[pos] >= 'a' && str[pos] <= 'f') {
+                *uuid_ptr += str[pos] - 'a' + 0xa;
+            } else if (str[pos] >= 'A' && str[pos] <= 'F') {
+                *uuid_ptr += str[pos] - 'A' + 0xa;
+            }
+            pos++;
+        }
+    }
 
 #ifdef TARGET_I386
     smbios_add_field(1, offsetof(struct smbios_type_1, uuid), 16, uuid);
@@ -4887,7 +4908,7 @@ int main(int argc, char **argv, char **envp)
        QEMU to run on a single CPU */
     {
         HANDLE h;
-        DWORD mask, smask;
+        DWORD_PTR mask, smask;
         int i;
         h = GetCurrentProcess();
         if (GetProcessAffinityMask(h, &mask, &smask)) {

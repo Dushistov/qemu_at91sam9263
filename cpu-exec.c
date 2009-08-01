@@ -94,7 +94,7 @@ void cpu_resume_from_signal(CPUState *env1, void *puc)
    could be used if available. */
 static void cpu_exec_nocache(int max_cycles, TranslationBlock *orig_tb)
 {
-    unsigned long next_tb;
+    uintptr_t next_tb;
     TranslationBlock *tb;
 
     /* Should never happen.
@@ -213,7 +213,7 @@ int cpu_exec(CPUState *env1)
     int ret, interrupt_request;
     TranslationBlock *tb;
     uint8_t *tc_ptr;
-    unsigned long next_tb;
+    uintptr_t next_tb;
 
     if (cpu_halted(env1) == EXCP_HALTED)
         return EXCP_HALTED;
@@ -608,8 +608,8 @@ int cpu_exec(CPUState *env1)
                     tb_invalidated_flag = 0;
                 }
 #ifdef CONFIG_DEBUG_EXEC
-                qemu_log_mask(CPU_LOG_EXEC, "Trace 0x%08lx [" TARGET_FMT_lx "] %s\n",
-                             (long)tb->tc_ptr, tb->pc,
+                qemu_log_mask(CPU_LOG_EXEC, "Trace 0x%08Ix [" TARGET_FMT_lx "] %s\n",
+                             (intptr_t)tb->tc_ptr, tb->pc,
                              lookup_symbol(tb->pc));
 #endif
                 /* see if we can patch the calling TB. When the TB
@@ -647,7 +647,7 @@ int cpu_exec(CPUState *env1)
                     if ((next_tb & 3) == 2) {
                         /* Instruction counter expired.  */
                         int insns_left;
-                        tb = (TranslationBlock *)(long)(next_tb & ~3);
+                        tb = (TranslationBlock *)(intptr_t)(next_tb & ~3);
                         /* Restore PC.  */
                         cpu_pc_from_tb(env, tb);
                         insns_left = env->icount_decr.u32;

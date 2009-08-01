@@ -2740,9 +2740,9 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                 }
                 if (nb_args + 3 > MAX_ARGS)
                     goto error_args;
-                args[nb_args++] = (void*)(long)count;
-                args[nb_args++] = (void*)(long)format;
-                args[nb_args++] = (void*)(long)size;
+                args[nb_args++] = (void*)(intptr_t)count;
+                args[nb_args++] = (void*)(intptr_t)format;
+                args[nb_args++] = (void*)(intptr_t)size;
             }
             break;
         case 'i':
@@ -2771,7 +2771,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     typestr++;
                     if (nb_args >= MAX_ARGS)
                         goto error_args;
-                    args[nb_args++] = (void *)(long)has_arg;
+                    args[nb_args++] = (void *)(intptr_t)has_arg;
                     if (!has_arg) {
                         if (nb_args >= MAX_ARGS)
                             goto error_args;
@@ -2785,16 +2785,16 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                 if (c == 'i') {
                     if (nb_args >= MAX_ARGS)
                         goto error_args;
-                    args[nb_args++] = (void *)(long)val;
+                    args[nb_args++] = (void *)(intptr_t)val;
                 } else {
                     if ((nb_args + 1) >= MAX_ARGS)
                         goto error_args;
 #if TARGET_PHYS_ADDR_BITS > 32
-                    args[nb_args++] = (void *)(long)((val >> 32) & 0xffffffff);
+                    args[nb_args++] = (void *)(intptr_t)((val >> 32) & 0xffffffff);
 #else
                     args[nb_args++] = (void *)0;
 #endif
-                    args[nb_args++] = (void *)(long)(val & 0xffffffff);
+                    args[nb_args++] = (void *)(intptr_t)(val & 0xffffffff);
                 }
             }
             break;
@@ -2821,7 +2821,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                 }
                 if (nb_args >= MAX_ARGS)
                     goto error_args;
-                args[nb_args++] = (void *)(long)has_option;
+                args[nb_args++] = (void *)(intptr_t)has_option;
             }
             break;
         default:

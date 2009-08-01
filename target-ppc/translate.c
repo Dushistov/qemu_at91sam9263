@@ -3298,7 +3298,7 @@ static always_inline void gen_goto_tb (DisasContext *ctx, int n,
         likely(!ctx->singlestep_enabled)) {
         tcg_gen_goto_tb(n);
         tcg_gen_movi_tl(cpu_nip, dest & ~3);
-        tcg_gen_exit_tb((long)tb + n);
+        tcg_gen_exit_tb((intptr_t)tb + n);
     } else {
         tcg_gen_movi_tl(cpu_nip, dest & ~3);
         if (unlikely(ctx->singlestep_enabled)) {
@@ -9098,7 +9098,7 @@ void gen_intermediate_code_pc (CPUState *env, struct TranslationBlock *tb)
 }
 
 void gen_pc_load(CPUState *env, TranslationBlock *tb,
-                unsigned long searched_pc, int pc_pos, void *puc)
+                uintptr_t searched_pc, int pc_pos, void *puc)
 {
     env->nip = gen_opc_pc[pc_pos];
 }

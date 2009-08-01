@@ -37,6 +37,7 @@
 #include "gdbstub.h"
 #endif
 
+#undef SYS_OPEN
 #define SYS_OPEN        0x01
 #define SYS_CLOSE       0x02
 #define SYS_WRITEC      0x03

@@ -302,7 +302,7 @@ static void gen_goto_tb(DisasContext * ctx, int n, target_ulong dest)
 	/* Use a direct jump if in same page and singlestep not enabled */
         tcg_gen_goto_tb(n);
         tcg_gen_movi_i32(cpu_pc, dest);
-        tcg_gen_exit_tb((long) tb + n);
+        tcg_gen_exit_tb((intptr_t) tb + n);
     } else {
         tcg_gen_movi_i32(cpu_pc, dest);
         if (ctx->singlestep_enabled)
@@ -2030,7 +2030,7 @@ void gen_intermediate_code_pc(CPUState * env, struct TranslationBlock *tb)
 }
 
 void gen_pc_load(CPUState *env, TranslationBlock *tb,
-                unsigned long searched_pc, int pc_pos, void *puc)
+                uintptr_t searched_pc, int pc_pos, void *puc)
 {
     env->pc = gen_opc_pc[pc_pos];
     env->flags = gen_opc_hflags[pc_pos];
