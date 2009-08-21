@@ -692,7 +692,7 @@ static inline void gen_bx_im(DisasContext *s, uint32_t addr)
         tcg_gen_st_i32(tmp, cpu_env, offsetof(CPUState, thumb));
         dead_tmp(tmp);
     }
-    tcg_gen_mov_i32(cpu_R[15], addr & ~1);
+    tcg_gen_movi_i32(cpu_R[15], addr & ~1);
 }
 
 /* Set PC and Thumb state from var.  var is marked as dead.  */
@@ -3139,6 +3139,7 @@ static int disas_vfp_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     gen_mov_F0_vreg(dp, rd);
                     gen_vfp_st(s, dp, addr);
                 }
+                dead_tmp(addr);
             } else {
                 /* load/store multiple */
                 if (dp)
@@ -8303,7 +8304,8 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
         if (rd != 16) {
             if (val) {
                 store_reg(s, rm, tmp2);
-                dead_tmp(tmp);
+                if (op != 0xf)
+                    dead_tmp(tmp);
             } else {
                 store_reg(s, rd, tmp);
                 dead_tmp(tmp2);
