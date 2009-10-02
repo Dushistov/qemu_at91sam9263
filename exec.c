@@ -2225,7 +2225,7 @@ int page_check_range(target_ulong start, target_ulong len, int flags)
 
 /* called from signal handler: invalidate the code and unprotect the
    page. Return TRUE if the fault was successfully handled. */
-int page_unprotect(target_ulong address, unsigned long pc, void *puc)
+int page_unprotect(target_ulong address, uintptr_t pc, void *puc)
 {
     unsigned int page_index, prot, pindex;
     PageDesc *p, *p1;
