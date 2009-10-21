@@ -340,15 +340,57 @@ ram_addr_t qemu_balloon_status(void)
 /***********************************************************/
 /* keyboard/mouse */
 
-static QEMUPutKBDEvent *qemu_put_kbd_event;
-static void *qemu_put_kbd_event_opaque;
+static QEMUPutKeyboardEntry *qemu_put_kbd_event_head;
 static QEMUPutMouseEntry *qemu_put_mouse_event_head;
 static QEMUPutMouseEntry *qemu_put_mouse_event_current;
 
-void qemu_add_kbd_event_handler(QEMUPutKBDEvent *func, void *opaque)
+QEMUPutKeyboardEntry *qemu_add_kbd_event_handler(QEMUPutKBDEvent *func, void *opaque)
 {
-    qemu_put_kbd_event_opaque = opaque;
-    qemu_put_kbd_event = func;
+    QEMUPutKeyboardEntry *s, *cursor;
+
+    s = qemu_mallocz(sizeof(QEMUPutKeyboardEntry));
+
+    s->qemu_put_kbd_event = func;
+    s->qemu_put_kbd_event_opaque = opaque;
+    s->next = NULL;
+
+    if (!qemu_put_kbd_event_head) {
+        qemu_put_kbd_event_head = s;
+        return s;
+    }
+
+    cursor = qemu_put_kbd_event_head;
+    while (cursor->next != NULL)
+        cursor = cursor->next;
+
+    cursor->next = s;
+
+    return s;
+}
+
+void qemu_remove_kbd_event_handler(QEMUPutKeyboardEntry *entry)
+{
+    QEMUPutKeyboardEntry *prev = NULL, *cursor;
+
+    if (!qemu_put_kbd_event_head || entry == NULL)
+        return;
+
+    cursor = qemu_put_kbd_event_head;
+    while (cursor != NULL && cursor != entry) {
+        prev = cursor;
+        cursor = cursor->next;
+    }
+
+    if (cursor == NULL) // does not exist or list empty
+        return;
+    else if (prev == NULL) { // entry is head
+        qemu_put_kbd_event_head = cursor->next;
+        qemu_free(entry);
+        return;
+    }
+
+    prev->next = entry->next;
+    qemu_free(entry);
 }
 
 QEMUPutMouseEntry *qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
@@ -415,8 +457,12 @@ void qemu_remove_mouse_event_handler(QEMUPutMouseEntry *entry)
 
 void kbd_put_keycode(int keycode)
 {
-    if (qemu_put_kbd_event) {
-        qemu_put_kbd_event(qemu_put_kbd_event_opaque, keycode);
+    QEMUPutKeyboardEntry *cursor;
+
+    cursor = qemu_put_kbd_event_head;
+    while (cursor != NULL) {
+        cursor->qemu_put_kbd_event(cursor->qemu_put_kbd_event_opaque, keycode);
+        cursor = cursor->next;
     }
 }
 
