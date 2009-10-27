@@ -29,11 +29,11 @@ typedef struct RotaryCoderState {
     SysBusDevice busdev;
     qemu_irq out[2];
     uint8_t state;
-    uint8_t key_left;
-    uint8_t key_right;
-    uint8_t key_left_alt;
-    uint8_t key_right_alt;
     uint8_t extension;
+    uint32_t key_left;
+    uint32_t key_right;
+    uint32_t key_left_alt;
+    uint32_t key_right_alt;
 } RotaryCoderState;
 
 static void rotary_update(RotaryCoderState *s, int direction)
@@ -58,7 +58,7 @@ static void rotary_keyboard_event(void *opaque, int keycode)
         keycode &= 0x7f;
         keycode |= s->extension;
 
-        if (keycode == s->key_left || keycode == s->key_left_alt) {
+		if (keycode == s->key_left || keycode == s->key_left_alt) {
             rotary_update(s, 3);
         } else if (keycode == s->key_right || keycode == s->key_right_alt) {
             rotary_update(s, 1);
