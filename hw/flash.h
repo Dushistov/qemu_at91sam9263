@@ -16,6 +16,17 @@ pflash_t *pflash_cfi02_register(target_phys_addr_t base, ram_addr_t off,
                                 uint16_t id2, uint16_t id3,
                                 uint16_t unlock_addr0, uint16_t unlock_addr1);
 
+/* pflash_cfi_atmel.c */
+pflash_t *pflash_cfi_atmel_register(target_phys_addr_t base, ram_addr_t off,
+				    BlockDriverState *bs,
+				    uint32_t boot_sect_len,
+				    int nb_boot_blocks,
+				    uint32_t sector_len,
+				    int nb_blocs, int width,
+				    uint16_t id0, uint16_t id1,
+				    uint16_t id2, uint16_t id3);
+
+
 /* nand.c */
 typedef struct NANDFlashState NANDFlashState;
 NANDFlashState *nand_init(int manf_id, int chip_id);
