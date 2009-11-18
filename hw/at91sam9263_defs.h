@@ -3,7 +3,9 @@
 
 /* base periph addresses */
 #define AT91_PERIPH_BASE     0xF0000000
+#define AT91_TC012_BASE      0xFFF7C000
 #define AT91_USART0_BASE     0xFFF8C000
+#define AT91_EMAC_BASE       0xFFFBC000
 #define AT91_SDRAMC0_BASE    0xFFFFE200
 #define AT91_SMC0_BASE       0xFFFFE400
 #define AT91_ECC1_BASE       0xFFFFE600
@@ -11,7 +13,11 @@
 #define AT91_CCFG_BASE       0xFFFFED10
 #define AT91_DBGU_BASE       0xFFFFEE00
 #define AT91_AIC_BASE        0xFFFFF000
-#define AT91_PIO_BASE        0xFFFFF200
+#define AT91_PIOA_BASE       0xFFFFF200
+#define AT91_PIOB_BASE       0xFFFFF400
+#define AT91_PIOC_BASE       0xFFFFF600
+#define AT91_PIOD_BASE       0xFFFFF800
+#define AT91_PIOE_BASE       0xFFFFFA00
 #define AT91_PMC_BASE        0xFFFFFC00
 #define AT91_RSTC_BASE       0xFFFFFD00
 #define AT91_PITC_BASE       0xFFFFFD30
