@@ -55,7 +55,6 @@
 #define SR_PCK3RDY      0x800
 
 #define SO_FREQ         32768
-#define MO_FREQ         9216000
 
 int at91_master_clock_frequency = SO_FREQ;
 
@@ -72,6 +71,7 @@ typedef struct PMCState {
     uint32_t sr;
     uint32_t imr;
     uint32_t mck_freq;
+    uint32_t mo_freq;
 } PMCState;
 
 static void at91_pmc_update_irq(PMCState *s)
@@ -81,7 +81,7 @@ static void at91_pmc_update_irq(PMCState *s)
 
 static void at91_update_master_clock(PMCState *s)
 {
-    int mck_freq = MO_FREQ;
+    int mck_freq = s->mo_freq;
 
     /* Clock selection */
     switch (s->mckr & 3) {
@@ -128,6 +128,10 @@ static uint32_t at91_pmc_mem_read(void *opaque, target_phys_addr_t offset)
     PMCState *s = opaque;
 
     switch (offset) {
+    case PMC_PLLA:
+        return s->plla;
+    case PMC_PLLB:
+        return s->pllb;
     case PMC_SCSR:
         return s->scsr;
     case PMC_PCSR:
@@ -136,7 +140,7 @@ static uint32_t at91_pmc_mem_read(void *opaque, target_phys_addr_t offset)
         return s->mor;
     case PMC_MCFR:
         if (s->mor & 1)
-            return (1 << 16) | (MO_FREQ / SO_FREQ / 16);
+            return (1 << 16) | (s->mo_freq / SO_FREQ / 16);
         return 0;
     case PMC_PCKR ... PMC_PCKR + 15:
         return s->pckr[(offset - PMC_PCKR) >> 2];
@@ -144,6 +148,8 @@ static uint32_t at91_pmc_mem_read(void *opaque, target_phys_addr_t offset)
         return s->sr;
     case PMC_IMR:
         return s->imr;
+    case PMC_MCKR:
+        return s->mckr;
     default:
         return 0;
     }
@@ -290,9 +296,24 @@ static void at91_pmc_init(SysBusDevice *dev)
     register_savevm("at91_pmc", -1, 1, at91_pmc_save, at91_pmc_load, s);
 }
 
+static SysBusDeviceInfo pmc_info = {
+    .init = at91_pmc_init,
+    .qdev.name = "at91,pmc",
+    .qdev.size = sizeof(PMCState),
+    .qdev.props = (Property[]) {
+        {
+            .name   = "mo_freq",
+            .info   = &qdev_prop_uint32,
+            .offset = offsetof(PMCState, mo_freq),
+            .defval = (uint32_t[]) { 0 },
+        },
+       {/* end of list */}
+    }
+};
+
 static void at91_pmc_register(void)
 {
-    sysbus_register_dev("at91,pmc", sizeof(PMCState), at91_pmc_init);
+    sysbus_register_withprop(&pmc_info);
 }
 
 device_init(at91_pmc_register)
