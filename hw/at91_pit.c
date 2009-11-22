@@ -59,6 +59,7 @@ static void at91_pit_tick(void *opaque)
 static uint32_t at91_pit_mem_read(void *opaque, target_phys_addr_t offset)
 {
     PITState *s = opaque;
+    uint32_t picnt = s->picnt;
 
     offset &= 0xf;
     switch (offset) {
@@ -68,12 +69,13 @@ static uint32_t at91_pit_mem_read(void *opaque, target_phys_addr_t offset)
         return s->sr;
     case PIT_PIVR:
         s->sr = 0;
+        s->picnt = 0;
         qemu_set_irq(s->irq, 0);
         /* Fall-through */
     case PIT_PIIR:
         return
             ((PIT_LIMIT(s) - ptimer_get_count(s->timer)) & 0xfffff) |
-            (s->picnt << 20);
+            (picnt << 20);
 
     default:
         return 0;
@@ -94,6 +96,12 @@ static void at91_pit_mem_write(void *opaque, target_phys_addr_t offset,
             ptimer_run(s->timer, 0);
         } else {
             ptimer_stop(s->timer);
+            /*
+              "After the PIT Enable bit is reset (PITEN= 0), the CPIV goes on counting until
+              the PIV value is reached, and is then reset"
+              Do not wait, set CPIV to right value now.
+            */
+            ptimer_set_count(s->timer, PIT_LIMIT(s));
         }
     }
 }
