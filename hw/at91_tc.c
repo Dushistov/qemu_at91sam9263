@@ -72,15 +72,23 @@ static void at91_tc_tick(void *opaque)
 {
     TCChannelState *s = opaque;
 
-    s->cv++;
-    /* TODO: Overflow check */
-    if (s->cv == s->ra) {
-        s->sr |= SR_CPAS;
-    }
-    if (s->cv == s->rb) {
-        s->sr |= SR_CPBS;
-    }
-    if (s->cv == s->rc) {
+    if (s->mr & MR_WAVE) {
+        s->cv++;
+        /* TODO: Overflow check */
+        if (s->cv == s->ra) {
+            s->sr |= SR_CPAS;
+        }
+        if (s->cv == s->rb) {
+            s->sr |= SR_CPBS;
+        }
+        if (s->cv == s->rc) {
+            s->sr |= SR_CPCS;
+            if (s->mr & MR_RCTRIG) {
+                s->cv = 0;
+            }
+        }
+    } else {
+        s->cv = s->rc;
         s->sr |= SR_CPCS;
         if (s->mr & MR_RCTRIG) {
             s->cv = 0;
@@ -106,7 +114,7 @@ static uint32_t at91_tc_channel_read(TCChannelState *s,
     case TC_RB:
         return s->rb;
     case TC_RC:
-        return s->rb;
+        return s->rc;
     case TC_SR:
         sr = s->sr;
         s->sr = 0;
@@ -119,6 +127,23 @@ static uint32_t at91_tc_channel_read(TCChannelState *s,
     }
 }
 
+static int at91_tc_get_freq(uint32_t cmr)
+{
+    int freq;
+
+    switch (cmr & 7) {
+    case 0: freq = at91_master_clock_frequency / 2; break;
+    case 1: freq = at91_master_clock_frequency / 8; break;
+    case 2: freq = at91_master_clock_frequency / 32; break;
+    case 3: freq = at91_master_clock_frequency / 128; break;
+    case 4: freq = at91_master_clock_frequency / 1024; break;
+    default: /* TODO: External clocks */
+        freq = at91_master_clock_frequency / 16;
+        break;
+    }
+    return freq;
+}
+
 static void at91_tc_channel_write(TCChannelState *s,
                 target_phys_addr_t offset, uint32_t value)
 {
@@ -127,30 +152,36 @@ static void at91_tc_channel_write(TCChannelState *s,
     switch (offset) {
     case TC_CCR:
         if ((value & 3) == 1) {
-            if (s->mr & MR_WAVE) {
-                s->cv = 0;
-                ptimer_run(s->timer, 0);
+            if (!(s->mr & MR_WAVE)) {
+                if (s->imr == 0 && s->rc != 0) {
+                    freq = at91_tc_get_freq(s->mr);
+                    freq /= s->rc;
+                    if (freq > 1000) {
+                        //just busy loop too wait something, with resolution more then 1ms
+                        s->cv = s->rc;
+                        s->sr |= SR_CPCS;
+                        if (s->mr & MR_RCTRIG) {
+                            s->cv = 0;
+                        }
+                        break;
+                    }
+                }
+                //tick only once, this should speedup system
+                ptimer_set_limit(s->timer, s->rc, 1);
             }
-            /* TODO: Counter mode */
+
+            s->cv = 0;
+            ptimer_run(s->timer, 0);
         } else if (value & 2) {
             ptimer_stop(s->timer);
+            ptimer_set_limit(s->timer, 1, 1);
         }
         break;
     case TC_CMR:
-        if (value & MR_WAVE) {
-            switch (value & 7) {
-                case 0: freq = at91_master_clock_frequency / 2; break;
-                case 1: freq = at91_master_clock_frequency / 8; break;
-                case 2: freq = at91_master_clock_frequency / 32; break;
-                case 3: freq = at91_master_clock_frequency / 128; break;
-                case 4: freq = at91_master_clock_frequency / 1024; break;
-                default: /* TODO: External clocks */
-                    freq = at91_master_clock_frequency / 16;
-                    break;
-            }
-            ptimer_set_freq(s->timer, freq);
-        }
-        /* TODO: Counter mode */
+        freq = at91_tc_get_freq(value);
+
+        ptimer_set_freq(s->timer, freq);
+
         s->mr = value;
         break;
     case TC_RA:
@@ -175,6 +206,7 @@ static uint32_t at91_tc_mem_read(void *opaque, target_phys_addr_t offset)
 {
     TCState *s = opaque;
 
+    offset &= TC_SIZE - 1;
     switch (offset) {
     case TC_BMR:
         return 0; /* TODO */
@@ -193,6 +225,8 @@ static void at91_tc_mem_write(void *opaque, target_phys_addr_t offset,
                 uint32_t value)
 {
     TCState *s = opaque;
+
+    offset &= TC_SIZE - 1;
 
     switch (offset) {
     case TC_BCR:
