@@ -238,6 +238,7 @@ static void at91_pmc_save(QEMUFile *f, void *opaque)
     }
     qemu_put_be32(f, s->sr);
     qemu_put_be32(f, s->imr);
+    qemu_put_be32(f, s->mo_freq);
 }
 
 static int at91_pmc_load(QEMUFile *f, void *opaque, int version_id)
@@ -259,6 +260,7 @@ static int at91_pmc_load(QEMUFile *f, void *opaque, int version_id)
     }
     s->sr = qemu_get_be32(f);
     s->imr = qemu_get_be32(f);
+    s->mo_freq = qemu_get_be32(f);
 
     at91_update_master_clock(s);
 
