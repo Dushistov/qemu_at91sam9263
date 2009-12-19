@@ -13,11 +13,13 @@
 #include "devices.h"
 #include "net.h"
 #include "sysemu.h"
+#include "spi.h"
 #include "flash.h"
 #include "boards.h"
 #include "qemu-char.h"
 #include "qemu-timer.h"
 #include "sysbus.h"
+#include "at91.h"
 
 #include "at91sam9263_defs.h"
 
@@ -62,7 +64,7 @@ struct at91sam9_state {
     uint32_t sdramc0_regs[(AT91_SMC0_BASE - AT91_SDRAMC0_BASE) / sizeof(uint32_t)];
     uint32_t smc0_regs[(AT91_ECC1_BASE - AT91_SMC0_BASE) / sizeof(uint32_t)];
     uint32_t usart0_regs[0x1000 / sizeof(uint32_t)];
-    struct dbgu_state dbgu;
+//    struct dbgu_state dbgu;
     pflash_t *norflash;
     ram_addr_t internal_sram;
     QEMUTimer *dbgu_tr_timer;
@@ -70,6 +72,8 @@ struct at91sam9_state {
     int timer_active;
     CPUState *env;
     qemu_irq *qirq;
+    ram_addr_t bootrom;
+    int rom_size;
 };
 
 static uint32_t at91_bus_matrix_read(void *opaque, target_phys_addr_t offset)
@@ -125,7 +129,7 @@ static void at91_ccfg_write(void *opaque, target_phys_addr_t offset,
 static uint32_t at91_sdramc0_read(void *opaque, target_phys_addr_t offset)
 {
     struct at91sam9_state *sam9 = (struct at91sam9_state *)opaque;
- 
+
     TRACE("sdramc0 read offset %X\n", offset);
     return sam9->sdramc0_regs[offset / sizeof(sam9->sdramc0_regs[0])];
 }
@@ -134,7 +138,7 @@ static void at91_sdramc0_write(void *opaque, target_phys_addr_t offset,
                                uint32_t value)
 {
     struct at91sam9_state *sam9 = (struct at91sam9_state *)opaque;
- 
+
     TRACE("sdramc0 write offset %X, value %X\n", offset, value);
     sam9->sdramc0_regs[offset / sizeof(sam9->sdramc0_regs[0])] = value;
 }
@@ -223,6 +227,7 @@ static CPUWriteMemoryFunc *at91_periph_writefn[] = {
     at91_periph_write
 };
 
+CPUState *g_env;
 
 static void at91sam9_init(ram_addr_t ram_size,
                           const char *boot_device,
@@ -241,9 +246,23 @@ static void at91sam9_init(ram_addr_t ram_size,
     DeviceState *dev;
     DeviceState *pit;
     DeviceState *pmc;
+    DeviceState *spi;
     int i;
+    int bms;
+    SPIControl *cs0_spi_handler;
 
-    DEBUG("begin, ram_size %llu\n", (unsigned long long)ram_size);
+    cs0_spi_handler = qemu_mallocz(sizeof(SPIControl));
+    DEBUG("begin, ram_size %llu, boot dev %s\n", (unsigned long long)ram_size,
+          boot_device ? boot_device : "<empty>");
+
+    if (option_rom[0] && boot_device[0] == 'n') {
+        printf("Emulate ROM code\n");
+        bms = 1;
+    } else {
+        printf("Emulate start from EBI0_NCS0\n");
+        bms = 0;
+    }
+
 #ifdef TRACE_ON
     trace_file = fopen("/tmp/trace.log", "w");
 #endif
@@ -267,6 +286,12 @@ static void at91sam9_init(ram_addr_t ram_size,
     /* Internal SRAM */
     sam9->internal_sram = qemu_ram_alloc(80 * 1024);
     cpu_register_physical_memory(0x00300000, 80 * 1024, sam9->internal_sram | IO_MEM_RAM);
+    sam9->bootrom = qemu_ram_alloc(0x100000);
+    cpu_register_physical_memory(0x00400000, 0x100000, sam9->bootrom | IO_MEM_RAM);
+    if (option_rom[0]) {
+        sam9->rom_size = load_image_targphys(option_rom[0], 0x00400000, 0x100000);
+        printf("load bootrom, size %d\n", sam9->rom_size);
+    }
 
     /*Internal Peripherals */
     iomemtype = cpu_register_io_memory(at91_periph_readfn, at91_periph_writefn, sam9);
@@ -291,7 +316,7 @@ static void at91sam9_init(ram_addr_t ram_size,
     qdev_prop_set_uint32(pmc, "mo_freq", 16000000);
     pit = sysbus_create_simple("at91,pit", AT91_PITC_BASE, pic1[3]);
     sysbus_create_varargs("at91,tc", AT91_TC012_BASE, pic[19], pic[19], pic[19], NULL);
-
+    spi = sysbus_create_simple("at91,spi", AT91_SPI0_BASE, pic[14]);
     at91_init_bus_matrix(sam9);
     memset(&sam9->ccfg_regs, 0, sizeof(sam9->ccfg_regs));
     sysbus_create_simple("at91,pio", AT91_PIOA_BASE, pic[2]);
@@ -318,33 +343,46 @@ static void at91sam9_init(ram_addr_t ram_size,
     */
     dinfo = drive_get(IF_PFLASH, 0, 0);
     if (dinfo) {
-        ram_addr_t nor_flash_mem = qemu_ram_alloc(NOR_FLASH_SIZE);
-        if (!nor_flash_mem) {
-            fprintf(stderr, "allocation failed\n");
-            exit(EXIT_FAILURE);
+        if (bms) {
+            if (spi_flash_register(dinfo->bdrv, 2 * 1024 * 1024, cs0_spi_handler) < 0) {
+                fprintf(stderr, "init of spi flash failed\n");
+                exit(EXIT_FAILURE);
+            }
+            qdev_prop_set_ptr(spi, "spi_control", cs0_spi_handler);
+            //rom
+            cpu_register_physical_memory(0x0, 100 * 1024,
+                                         sam9->bootrom | IO_MEM_ROMD);
+        } else {
+            //nor flash
+            ram_addr_t nor_flash_mem = qemu_ram_alloc(NOR_FLASH_SIZE);
+            if (!nor_flash_mem) {
+                fprintf(stderr, "allocation failed\n");
+                exit(EXIT_FAILURE);
+            }
+
+            sam9->norflash = pflash_cfi_atmel_register(AT91SAM9263EK_NORFLASH_OFF,
+                                                       nor_flash_mem,
+                                                       dinfo->bdrv,
+                                                       4 * 1024 * 2, 8,
+                                                       32 * 1024 * 2,
+                                                       (135 - 8),
+                                                       2, 0x001F, 0x01D6, 0, 0);
+
+            if (!sam9->norflash) {
+                fprintf(stderr, "qemu: error registering flash memory.\n");
+                exit(EXIT_FAILURE);
+            }
+
+            DEBUG("register flash at 0x0\n");
+            //register only part of flash, to prevent conflict with internal sram
+            cpu_register_physical_memory(0x0, 100 * 1024,
+                                         nor_flash_mem | IO_MEM_ROMD);
         }
-
-        sam9->norflash = pflash_cfi_atmel_register(AT91SAM9263EK_NORFLASH_OFF,
-                                                   nor_flash_mem,
-                                                   dinfo->bdrv,
-                                                   4 * 1024 * 2, 8,
-                                                   32 * 1024 * 2,
-                                                   (135 - 8),
-                                                   2, 0x001F, 0x01D6, 0, 0);
-
-        if (!sam9->norflash) {
-            fprintf(stderr, "qemu: error registering flash memory.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        DEBUG("register flash at 0x0\n");
-        //register only part of flash, to prevent conflict with internal sram
-        cpu_register_physical_memory(0x0, 100 * 1024 /*NOR_FLASH_SIZE*/,
-                                     nor_flash_mem | IO_MEM_ROMD);
     } else {
         fprintf(stderr, "qemu: can not start without flash.\n");
         exit(EXIT_FAILURE);
     }
+    g_env = env;
     env->regs[15] = 0x0;
 }
 
