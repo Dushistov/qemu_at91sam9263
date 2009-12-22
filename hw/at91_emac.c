@@ -410,6 +410,8 @@ static uint32_t at91_emac_mem_read(void *opaque, target_phys_addr_t offset)
     EMACState *s = opaque;
     uint32_t isr;
 
+    offset &= EMAC_SIZE - 1;
+
     switch (offset) {
     case EMAC_CTL:
         return s->ctl;
@@ -447,6 +449,8 @@ static void at91_emac_mem_write(void *opaque, target_phys_addr_t offset,
                 uint32_t value)
 {
     EMACState *s = opaque;
+
+    offset &= EMAC_SIZE - 1;
 
     switch (offset) {
     case EMAC_CTL:
