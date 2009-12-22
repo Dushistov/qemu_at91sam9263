@@ -2,6 +2,7 @@
 #define _HW_AT91SAM9263_DEFS_H_
 
 /* base periph addresses */
+#define AT91_LCDC_BASE        0x00700000
 #define AT91_PERIPH_BASE     0xF0000000
 #define AT91_TC012_BASE      0xFFF7C000
 #define AT91_USART0_BASE     0xFFF8C000

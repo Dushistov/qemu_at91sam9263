@@ -336,7 +336,7 @@ static void at91sam9_init(ram_addr_t ram_size,
     sysbus_mmio_map(sysbus_from_qdev(dev), 0, AT91_EMAC_BASE);
     sysbus_connect_irq(sysbus_from_qdev(dev), 0, pic[21]);
 
-
+    sysbus_create_simple("at91,lcdc", AT91_LCDC_BASE, pic[26]);
     /*
       we use variant of booting from external memory (NOR FLASH),
       it mapped to 0x0 at start, and also it is accessable from 0x10000000 address
