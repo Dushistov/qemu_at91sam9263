@@ -39,7 +39,7 @@
 # define NAND_IOSTATUS_PLANE1	(1 << 2)
 # define NAND_IOSTATUS_PLANE2	(1 << 3)
 # define NAND_IOSTATUS_PLANE3	(1 << 4)
-# define NAND_IOSTATUS_BUSY	(1 << 6)
+# define NAND_IOSTATUS_READY	(1 << 6)
 # define NAND_IOSTATUS_UNPROTCT	(1 << 7)
 
 # define MAX_PAGE		0x800
@@ -207,7 +207,8 @@ static void nand_reset(NANDFlashState *s)
     s->addrlen = 0;
     s->iolen = 0;
     s->offset = 0;
-    s->status &= NAND_IOSTATUS_UNPROTCT;
+    s->status = NAND_IOSTATUS_READY;
+    s->status &= ~NAND_IOSTATUS_UNPROTCT;
 }
 
 static void nand_command(NANDFlashState *s)
@@ -358,11 +359,11 @@ void nand_setio(NANDFlashState *s, uint8_t value)
         }
         if (value == NAND_CMD_READ0)
             s->offset = 0;
-	else if (value == NAND_CMD_READ1) {
+        else if (value == NAND_CMD_READ1) {
             s->offset = 0x100;
             value = NAND_CMD_READ0;
         }
-	else if (value == NAND_CMD_READ2) {
+        else if (value == NAND_CMD_READ2) {
             s->offset = 1 << s->page_shift;
             value = NAND_CMD_READ0;
         }
@@ -370,12 +371,12 @@ void nand_setio(NANDFlashState *s, uint8_t value)
         s->cmd = value;
 
         if (s->cmd == NAND_CMD_READSTATUS ||
-                s->cmd == NAND_CMD_PAGEPROGRAM2 ||
-                s->cmd == NAND_CMD_BLOCKERASE1 ||
-                s->cmd == NAND_CMD_BLOCKERASE2 ||
-                s->cmd == NAND_CMD_NOSERIALREAD2 ||
-                s->cmd == NAND_CMD_RANDOMREAD2 ||
-                s->cmd == NAND_CMD_RESET)
+            s->cmd == NAND_CMD_PAGEPROGRAM2 ||
+            s->cmd == NAND_CMD_BLOCKERASE1 ||
+            s->cmd == NAND_CMD_BLOCKERASE2 ||
+            s->cmd == NAND_CMD_NOSERIALREAD2 ||
+            s->cmd == NAND_CMD_RANDOMREAD2 ||
+            s->cmd == NAND_CMD_RESET)
             nand_command(s);
 
         if (s->cmd != NAND_CMD_RANDOMREAD2) {
@@ -392,14 +393,14 @@ void nand_setio(NANDFlashState *s, uint8_t value)
             nand_command(s);
 
         if (!(nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP) &&
-                s->addrlen == 3 && (
-                    s->cmd == NAND_CMD_READ0 ||
-                    s->cmd == NAND_CMD_PAGEPROGRAM1))
+            s->addrlen == 3 && (
+                s->cmd == NAND_CMD_READ0 ||
+                s->cmd == NAND_CMD_PAGEPROGRAM1))
             nand_command(s);
         if ((nand_flash_ids[s->chip_id].options & NAND_SAMSUNG_LP) &&
-               s->addrlen == 4 && (
-                    s->cmd == NAND_CMD_READ0 ||
-                    s->cmd == NAND_CMD_PAGEPROGRAM1))
+            s->addrlen == 4 && (
+                s->cmd == NAND_CMD_READ0 ||
+                s->cmd == NAND_CMD_PAGEPROGRAM1))
             nand_command(s);
     }
 
@@ -408,7 +409,7 @@ void nand_setio(NANDFlashState *s, uint8_t value)
             s->io[s->iolen ++] = value;
     } else if (!s->cle && !s->ale && s->cmd == NAND_CMD_COPYBACKPRG1) {
         if ((s->addr & ((1 << s->addr_shift) - 1)) <
-                (1 << s->page_shift) + (1 << s->oob_shift)) {
+            (1 << s->page_shift) + (1 << s->oob_shift)) {
             s->io[s->iolen + (s->addr & ((1 << s->addr_shift) - 1))] = value;
             s->addr ++;
         }

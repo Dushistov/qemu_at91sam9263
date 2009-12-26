@@ -1,13 +1,14 @@
 #include <stdio.h>
 
 #include "hw.h"
+#include "flash.h"
 #include "at91.h"
 
 typedef struct NandState {
-    unsigned int cmd;
+    NANDFlashState *nand_state;
 } NandState;
 
-#define AT91_NAND_DEBUG
+//#define AT91_NAND_DEBUG
 #ifdef AT91_NAND_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
@@ -23,23 +24,19 @@ static uint32_t at91_nand_mem_read(void *opaque, target_phys_addr_t offset)
 {
     NandState *s = opaque;
 
-    DPRINTF("(IP %X) read from %X\n", g_env->regs[15], offset);
-    switch (s->cmd) {
-    case 0x70:
-        s->cmd = 0;
-        return 0x40;
-    default:
-        return 0x0;
-    }
+    uint8_t res = nand_getio(s->nand_state);
+    DPRINTF("(IP %X) read from %X (res %X)\n", g_env->regs[15], offset, res);
+    return res;
 }
 
 static void at91_nand_mem_write(void *opaque, target_phys_addr_t offset,
                 uint32_t value)
 {
-    NandState *s = opaque;
+    NandState *s = opaque;        
 
+    nand_setpins(s->nand_state, offset & (1 << 22), offset & (1 << 21), 0, 1, 0);
     DPRINTF("(IP %X) write to %X %X\n", g_env->regs[15], offset, value);
-    s->cmd = value;
+    nand_setio(s->nand_state, value & 0xFF);
 }
 
 static CPUReadMemoryFunc *at91_nand_readfn[] = {
@@ -54,12 +51,13 @@ static CPUWriteMemoryFunc *at91_nand_writefn[] = {
     at91_nand_mem_write,
 };
 
-void at91_nand_register(void)
+void at91_nand_register(NANDFlashState *st)
 {
     NandState *s;
     int iomemtype;
 
     s = qemu_mallocz(sizeof(*s));
+    s->nand_state = st;
     iomemtype = cpu_register_io_memory(at91_nand_readfn, at91_nand_writefn, s);
     cpu_register_physical_memory(0x40000000, 0x10000000, iomemtype);
 }
