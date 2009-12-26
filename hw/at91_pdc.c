@@ -24,7 +24,7 @@
 #define PDC_PTCR_TXTEN  (1 << 8)
 #define PDC_PTCR_TXTDIS (1 << 9)
 
-#define AT91_PDC_DEBUG
+//#define AT91_PDC_DEBUG
 #ifdef AT91_PDC_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \

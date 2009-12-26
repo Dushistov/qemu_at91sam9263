@@ -344,6 +344,8 @@ static void at91sam9_init(ram_addr_t ram_size,
     dinfo = drive_get(IF_PFLASH, 0, 0);
     if (dinfo) {
         if (bms) {
+            NANDFlashState *nand_state;
+
             if (spi_flash_register(dinfo->bdrv, 4 * 1024 * 1024, cs0_spi_handler) < 0) {
                 fprintf(stderr, "init of spi flash failed\n");
                 exit(EXIT_FAILURE);
@@ -352,7 +354,8 @@ static void at91sam9_init(ram_addr_t ram_size,
             //rom
             cpu_register_physical_memory(0x0, 100 * 1024,
                                          sam9->bootrom | IO_MEM_ROMD);
-            at91_nand_register();
+            nand_state = nand_init(NAND_MFR_MICRON, 0xba);
+            at91_nand_register(nand_state);
         } else {
             //nor flash
             ram_addr_t nor_flash_mem = qemu_ram_alloc(NOR_FLASH_SIZE);
