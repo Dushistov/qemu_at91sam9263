@@ -42,7 +42,7 @@ typedef struct SPIState {
     PDCState *pdc_state;
 } SPIState;
 
-#define AT91_SPI_DEBUG
+//#define AT91_SPI_DEBUG
 #ifdef AT91_SPI_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
