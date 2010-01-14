@@ -12,7 +12,7 @@ typedef struct SPIFlash {
     BlockDriverState *bs;
 } SPIFlash;
 
-#define AT91_SPI_FLASH_DEBUG
+//#define AT91_SPI_FLASH_DEBUG
 #ifdef AT91_SPI_FLASH_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
@@ -67,7 +67,8 @@ static uint32_t spi_flash_txrx(void *opaque, uint32_t val, int len)
     case 0xD7:
         spi_flash_reset_state(s);
         DPRINTF("return id\n");
-        return (1 << 2) | (1 << 3) | (1 << 5) | (1 << 7);
+        return /*(1 << 2) | (1 << 3) | (1 << 5) | (1 << 7) AT45.*16*/
+            (1 << 2) | (1 << 4) | (1 << 5) | (1 << 7);
     default:
         DPRINTF("Unknown cmd\n");
         return 0;

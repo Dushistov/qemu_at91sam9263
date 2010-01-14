@@ -344,7 +344,7 @@ static void at91sam9_init(ram_addr_t ram_size,
     dinfo = drive_get(IF_PFLASH, 0, 0);
     if (dinfo) {
         if (bms) {
-            if (spi_flash_register(dinfo->bdrv, 2 * 1024 * 1024, cs0_spi_handler) < 0) {
+            if (spi_flash_register(dinfo->bdrv, 4 * 1024 * 1024, cs0_spi_handler) < 0) {
                 fprintf(stderr, "init of spi flash failed\n");
                 exit(EXIT_FAILURE);
             }
