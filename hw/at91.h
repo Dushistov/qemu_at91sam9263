@@ -39,7 +39,19 @@ typedef int (*pdc_start_transfer_t)(void *opaque,
                                      unsigned int rx_len,
                                      int last_transfer);
 
-PDCState *at91_pdc_init(void *opaque, pdc_start_transfer_t start_transfer);
+#define PDCF_ENDRX      1
+#define PDCF_ENDTX      2
+#define PDCF_RXFULL     4
+#define PDCF_TXFULL     8
+#define PDCF_NOT_ENDRX  16
+#define PDCF_NOT_RXFULL 32
+#define PDCF_NOT_ENDTX  64
+#define PDCF_NOT_TXFULL 128
+
+typedef void (*pdc_state_changed_t)(void *opaque, unsigned int state);
+
+PDCState *at91_pdc_init(void *opaque, pdc_start_transfer_t start_transfer,
+                            pdc_state_changed_t state_changed);
 extern void at91_pdc_reset(PDCState *s);
 extern void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val);
 extern uint32_t at91_pdc_read(void *opaque, target_phys_addr_t offset);

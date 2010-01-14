@@ -84,6 +84,8 @@ static uint32_t at91_spi_mem_read(void *opaque, target_phys_addr_t offset)
         return s->sr;
     case SPI_RDR:
         return s->rdr;
+    case SPI_IMR:
+        return s->imr;
     case SPI_CSR0 ... SPI_CSR3:
         return s->csr[(offset - SPI_CSR0) / sizeof(s->csr[0])];
     case 0x100 ... 0x124:
@@ -108,6 +110,12 @@ static void at91_spi_mem_write(void *opaque, target_phys_addr_t offset,
             s->sr |= SPI_SR_SPIENS;
         if (value & SPI_CR_SPIDIS)
             s->sr &= ~SPI_SR_SPIENS;
+        break;
+    case SPI_IER:
+        s->imr |= value;
+        break;
+    case SPI_IDR:
+        s->imr &= ~value;
         break;
     case SPI_MR:
         s->mr = value;
@@ -136,6 +144,24 @@ static CPUWriteMemoryFunc *at91_spi_writefn[] = {
     at91_spi_mem_write,
     at91_spi_mem_write,
 };
+
+static void pdc_state_changed(void *opaque, unsigned int state)
+{
+    SPIState *s = opaque;
+
+    s->sr |= (state & PDCF_ENDRX) ? SPI_SR_ENDRX : 0;
+    s->sr &= ~((state & PDCF_NOT_ENDRX) ? SPI_SR_ENDRX : 0);
+    s->sr |= (state & PDCF_ENDTX) ? SPI_SR_ENDTX : 0;
+    s->sr &= ~((state & PDCF_NOT_ENDTX) ? SPI_SR_ENDTX : 0);
+
+    s->sr |= (state & PDCF_RXFULL) ? SPI_SR_RXBUFF : 0;
+    s->sr &= ~((state & PDCF_NOT_RXFULL) ? SPI_SR_RXBUFF : 0);
+
+    s->sr |= (state & PDCF_TXFULL) ? SPI_SR_TXBUFE : 0;
+    s->sr &= ~((state & PDCF_NOT_TXFULL) ? SPI_SR_TXBUFE : 0);
+
+    qemu_set_irq(s->irq, !!(s->sr & s->imr));
+}
 
 static int pdc_start_transfer(void *opaque,
                                target_phys_addr_t tx,
@@ -176,14 +202,23 @@ static int pdc_start_transfer(void *opaque,
             --rx_len;
         }
     }
+#if 0
     if (flags & 1) {//tx
-        s->sr |= SPI_SR_ENDTX | SPI_SR_TXBUFE;
+        s->sr |= SPI_SR_ENDTX;
+        if (last_transfer) {
+            s->sr |= SPI_SR_TXBUFE;
+        }
     }
     if (flags & 2) {//rx
-        s->sr |= SPI_SR_RXBUFF | SPI_SR_ENDRX;
+        s->sr |= SPI_SR_ENDRX;
+        if (last_transfer) {
+            s->sr |= SPI_SR_RXBUFF;
+        }
     }
-    if (last_transfer)
+#endif
+    if (last_transfer) {        
         s->spi_control->set_chipselect(s->spi_control->opaque, 0);
+    }
     return 0;
 }
 
@@ -193,7 +228,7 @@ static void at91_spi_reset(void *opaque)
 
     s->mr = 0;
     s->rdr = 0;
-    s->sr = 0xf0;
+    s->sr = SPI_SR_ENDRX | SPI_SR_ENDTX | SPI_SR_RXBUFF | SPI_SR_TXBUFE;
     s->imr = 0;
     memset(s->csr, 0, sizeof(s->csr));
     at91_pdc_reset(s->pdc_state);
@@ -204,7 +239,7 @@ static void at91_spi_init(SysBusDevice *dev)
     SPIState *s = FROM_SYSBUS(typeof(*s), dev);
     int spi_regs;
 
-    s->pdc_state = at91_pdc_init(s, pdc_start_transfer);
+    s->pdc_state = at91_pdc_init(s, pdc_start_transfer, pdc_state_changed);
     sysbus_init_irq(dev, &s->irq);
     spi_regs = cpu_register_io_memory(at91_spi_readfn, at91_spi_writefn, s);
     sysbus_init_mmio(dev, SPI_SIZE, spi_regs);

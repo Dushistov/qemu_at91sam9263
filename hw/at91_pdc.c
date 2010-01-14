@@ -46,15 +46,18 @@ struct PDCState {
     uint16_t tncr;
     void *opaque;
     pdc_start_transfer_t start_transfer;
+    pdc_state_changed_t state_changed;
 };
 
-PDCState *at91_pdc_init(void *opaque, pdc_start_transfer_t start_transfer)
+PDCState *at91_pdc_init(void *opaque, pdc_start_transfer_t start_transfer,
+                        pdc_state_changed_t state_changed)
 {
     PDCState *s;
 
     s = qemu_mallocz(sizeof(PDCState));
     s->opaque = opaque;
     s->start_transfer = start_transfer;
+    s->state_changed = state_changed;
     return s;
 }
 
@@ -62,6 +65,7 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
 {
     PDCState *s = opaque;
     int last_transfer = 1;
+    unsigned int state = 0;
 
     switch (offset) {
     case PDC_PTCR:
@@ -71,25 +75,15 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
                 s->ptsr & PDC_PTCR_RXTEN ? "enable recieve" : "<>", 
                 s->ptsr & PDC_PTCR_TXTEN ? "enable transfer" : "<>");
 
-        if (val & PDC_PTCR_RXTEN) {
-            s->ptsr |= PDC_PTCR_RXTEN;
-        }
-
-        if (val & PDC_PTCR_RXTDIS) {
-            s->ptsr &= ~PDC_PTCR_RXTEN;
-        }
+        s->ptsr |= (val & PDC_PTCR_RXTEN) ? PDC_PTCR_RXTEN : 0;
+        s->ptsr &= ~((val & PDC_PTCR_RXTDIS) ? PDC_PTCR_RXTEN : 0);
 
         if (s->ptsr & PDC_PTCR_RXTEN) {
           last_transfer = s->rncr == 0;
         }
 
-        if (val & PDC_PTCR_TXTEN) {
-            s->ptsr |= PDC_PTCR_TXTEN;         
-        }
-
-        if (val & PDC_PTCR_TXTDIS) {
-            s->ptsr &= ~PDC_PTCR_TXTEN;
-        }
+        s->ptsr |= (val & PDC_PTCR_TXTEN) ? PDC_PTCR_TXTEN : 0;
+        s->ptsr &= ~((val & PDC_PTCR_TXTDIS) ? PDC_PTCR_TXTEN : 0);
 
         if (s->ptsr & PDC_PTCR_TXTEN) {
             last_transfer |= s->tncr == 0;
@@ -103,9 +97,15 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
 
             if (ret == 0) {
                 if (s->ptsr & PDC_PTCR_RXTEN) {
+                    if (s->rcr) {
+                        state |= PDCF_ENDRX;
+                    }
                     s->rcr = 0;
                 }
                 if (s->ptsr & PDC_PTCR_TXTEN) {
+                    if (s->tcr) {
+                        state |= PDCF_ENDTX;
+                    }
                     s->tcr = 0;
                 }
 
@@ -136,7 +136,15 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
                 }
             }
         }
-
+        if (s->rcr == 0 && s->rncr == 0) {
+            state |= PDCF_RXFULL;
+        }
+        if (s->tcr == 0 && s->tncr == 0) {
+            state |= PDCF_TXFULL;
+        }
+        if (state != 0) {
+            s->state_changed(s->opaque, state);
+        }
         break;
     case PDC_RPR:
         s->rpr = val;
@@ -146,21 +154,33 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
         break;
     case PDC_RCR:
         s->rcr = val;
+        if (s->rcr != 0) {
+            s->state_changed(s->opaque, PDCF_NOT_ENDRX | PDCF_NOT_RXFULL);
+        }
         break;
     case PDC_TCR:
         s->tcr = val;
+        if (s->tcr != 0) {
+            s->state_changed(s->opaque, PDCF_NOT_ENDTX | PDCF_NOT_TXFULL);
+        }
         break;
     case PDC_RNPR:
         s->rnpr = val;
         break;
     case PDC_RNCR:
         s->rncr = val;
+        if (s->rncr != 0) {
+            s->state_changed(s->opaque, PDCF_NOT_RXFULL);
+        }
         break;
     case PDC_TNPR:
         s->tnpr = val;
         break;
     case PDC_TNCR:
         s->tncr = val;
+        if (s->tncr != 0) {
+            s->state_changed(s->opaque, PDCF_NOT_TXFULL);
+        }
         break;
     default:
         DPRINTF("ignore write of %X to %X\n", val, offset);
