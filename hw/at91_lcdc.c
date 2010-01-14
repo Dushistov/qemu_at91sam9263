@@ -138,6 +138,18 @@ union pixel8u {
     uint8_t val;
 };
 
+struct pixel16 {
+    unsigned b : 5;
+    unsigned g : 5;
+    unsigned r : 5;
+};
+
+union pixel16u {
+    struct pixel16 p;
+    uint8_t val[0];
+};
+
+
 static void at91_lcdc_update_display(void *opaque)
 {
     LCDCState *s = opaque;
@@ -149,7 +161,9 @@ static void at91_lcdc_update_display(void *opaque)
     int q_bpp = (ds_get_bits_per_pixel(s->ds) + 7) >> 3;
     int bpp;
     int bpp_idx = (s->lcdcon2 >> 5) & 7;
-    union pixel8u tmp;
+    union pixel8u tmp8;
+    union pixel16u tmp16;
+    unsigned int r, g, b;
 
     DPRINTF("update begin\n");
     if (!(s->dmacon & DMACON_DMAEN))
@@ -167,33 +181,49 @@ static void at91_lcdc_update_display(void *opaque)
         return;//reserved value, unknown pixel size
     }
     /*TODO: fix this restriction*/
-    if (bpp != 8) {
-        fprintf(stderr, "Unsupported pixel size\n");
+    if (bpp != 8 && bpp != 16) {
+        fprintf(stderr, "Unsupported pixel size: %d\n", bpp);
         return;
     }
-    int once = 0;
+    //int once = 0;
     for (y = 0; y < height; ++y) {        
         for (x = 0; x < width; ++x) {
-            cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp.val, 1);
+            if (bpp == 8) {
+                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp8.val, 1);
+                r = tmp8.p.r;
+                g = tmp8.p.g;
+                b = tmp8.p.b;
+            } else {
+                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp16.val[0], 2);
+                r = tmp16.p.r;
+                g = tmp16.p.g;
+                b = tmp16.p.b;
+            }
+#if 0
             if (tmp.val != 0 && once == 0) {
                 once = 1;
-                DPRINTF("not null %X, %X, %X, bpp %d\n", (unsigned)tmp.p.r << 5, (unsigned)tmp.p.g << 5, (unsigned)tmp.p.b << 6, ds_get_bits_per_pixel(s->ds));
+                DPRINTF("not null %X, %X, %X, bpp %d\n", (unsigned)r << 5, (unsigned)g << 5, (unsigned)b << 6,
+                        ds_get_bits_per_pixel(s->ds));
             }
+#endif
             switch (ds_get_bits_per_pixel(s->ds)) {
             case 8:
-                color = rgb_to_pixel8(tmp.p.r, tmp.p.g, tmp.p.b);
+                color = rgb_to_pixel8(r, g, b);
                 break;
             case 15:
-                color = rgb_to_pixel15(tmp.p.r, tmp.p.g, tmp.p.b);
+                color = rgb_to_pixel15(r, g, b);
                 break;
             case 16:
-                color = rgb_to_pixel16(tmp.p.r, tmp.p.g, tmp.p.b);
+                color = rgb_to_pixel16(r, g, b);
                 break;
             case 24:
-                color = rgb_to_pixel24(tmp.p.r, tmp.p.g, tmp.p.b);
+                color = rgb_to_pixel24(r, g, b);
                 break;
             case 32:
-                color = rgb_to_pixel32((unsigned)tmp.p.r << 5, (unsigned)tmp.p.g << 5, (unsigned)tmp.p.b << 6);
+                if (bpp == 8)
+                    color = rgb_to_pixel32((unsigned)r << 5, (unsigned)g << 5, (unsigned)b << 6);
+                else
+                    color = rgb_to_pixel32((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
                 break;
             default:
                 return;

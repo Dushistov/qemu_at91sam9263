@@ -352,6 +352,7 @@ static void at91sam9_init(ram_addr_t ram_size,
             //rom
             cpu_register_physical_memory(0x0, 100 * 1024,
                                          sam9->bootrom | IO_MEM_ROMD);
+            at91_nand_register();
         } else {
             //nor flash
             ram_addr_t nor_flash_mem = qemu_ram_alloc(NOR_FLASH_SIZE);
