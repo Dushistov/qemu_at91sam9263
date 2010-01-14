@@ -411,7 +411,7 @@ obj-sparc-y += cs4231.o eccmemctl.o sbi.o sun4c_intctl.o
 endif
 
 obj-arm-y = integratorcp.o versatilepb.o smc91c111.o arm_pic.o arm_timer.o
-obj-arm-y += pflash_atmel.o at91sam9.o spi_flash.o at91_lcdc.o
+obj-arm-y += pflash_atmel.o at91sam9.o spi_flash.o at91_lcdc.o at91_nand.o
 obj-arm-y += arm_boot.o pl011.o pl031.o pl050.o pl080.o pl110.o pl181.o pl190.o
 obj-arm-y += versatile_pci.o
 obj-arm-y += realview_gic.o realview.o arm_sysctl.o mpcore.o

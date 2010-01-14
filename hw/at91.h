@@ -56,4 +56,6 @@ extern void at91_pdc_reset(PDCState *s);
 extern void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val);
 extern uint32_t at91_pdc_read(void *opaque, target_phys_addr_t offset);
 
+extern void at91_nand_register(void);
+
 #endif /* !AT91_H */
