@@ -169,8 +169,8 @@ static uint32_t crc32_le(uint32_t crc, unsigned char const *p, size_t len)
 
 static uint32_t address_match(EMACState *s, const uint8_t *buf)
 {
-    uint32_t addrl = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
-    uint16_t addrh = (buf[4] << 8) | buf[5];
+    uint32_t addrl = (buf[3] << 24) | (buf[2] << 16) | (buf[1] << 8) | buf[0];
+    uint16_t addrh = (buf[5] << 8) | buf[4];
 
     if ((s->sa_valid & 1) && addrl == s->sa1l && addrh == s->sa1h)
         return (1 << 26);
@@ -217,6 +217,7 @@ static ssize_t at91_emac_receive(VLANClientState *vc, const uint8_t *buf, size_t
     }
 
     status_len = address_match(s, buf);
+
     /* Either the address has to match or promiscuous mode must be enabled */
     if (status_len == 0 && !(s->cfg & CFG_CAF)) {
         return size;
@@ -496,7 +497,8 @@ static void at91_emac_mem_write(void *opaque, target_phys_addr_t offset,
         break;
     case EMAC_MAN:
         /* Check for PHY Address 31 */
-        if (((value >> 23) & 0x1f) == 31) {
+
+        if (1/*((value >> 23) & 0x1f) == 31*/) {
             if ((value & 0x30000000) == 0x20000000) {
                 value &= ~0xffff;
                 value |= at91_emac_phy_read(s, (value >> 18) & 0x1f);
@@ -517,11 +519,11 @@ static void at91_emac_mem_write(void *opaque, target_phys_addr_t offset,
         s->sa_valid |= 16;
         break;
     case 0x98:
-        s->sa1l = value;
+        s->sa1l = value;       
         s->sa_valid &= ~1;
         break;
     case 0x9c:
-        s->sa1h = value & 0xffff;
+        s->sa1h = value & 0xffff;       
         s->sa_valid |= 1;
         break;
     case 0xa0:
