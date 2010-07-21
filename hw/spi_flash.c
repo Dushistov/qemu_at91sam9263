@@ -10,7 +10,11 @@ typedef struct SPIFlash {
     void *storage;
     unsigned int len;
     BlockDriverState *bs;
+    uint8_t *buf1;
 } SPIFlash;
+
+#define DF_PAGE_SIZE 528
+#define BUF1_SIZE DF_PAGE_SIZE
 
 //#define AT91_SPI_FLASH_DEBUG
 #ifdef AT91_SPI_FLASH_DEBUG
@@ -45,7 +49,8 @@ static uint32_t spi_flash_txrx(void *opaque, uint32_t val, int len)
     DPRINTF("txrx: val %X\n", val);
     switch (s->cmd) {
     case 0:
-        s->cmd = val;
+        DPRINTF("New cmd %X\n", val);
+        s->cmd = val;        
         ++s->cmd_len;
         return 0;
     case 0xE8:
@@ -57,7 +62,7 @@ static uint32_t spi_flash_txrx(void *opaque, uint32_t val, int len)
         } else {
             uint8_t *bytes = s->storage;
             /*TODO: handle different page sizes*/
-            uint32_t addr = (s->addr >> 10) * 528 + (s->addr & 0x3ff);
+            uint32_t addr = (s->addr >> 10) * DF_PAGE_SIZE + (s->addr & 0x3ff);
             DPRINTF("we read %X\n", bytes[addr + s->cmd_len - 9]);
 
             return bytes[addr + s->cmd_len - 9];
@@ -69,8 +74,50 @@ static uint32_t spi_flash_txrx(void *opaque, uint32_t val, int len)
         DPRINTF("return id\n");
         return /*(1 << 2) | (1 << 3) | (1 << 5) | (1 << 7) AT45.*16*/
             (1 << 2) | (1 << 4) | (1 << 5) | (1 << 7);
+    case 0x84://write to sram buf1        
+        ++s->cmd_len;
+        DPRINTF("cmd_len %u, value: %u\n", s->cmd_len, val);
+        if (s->cmd_len > 2 && s->cmd_len < 5)
+            s->addr |= (val & 0xFF) << ((1 - (s->cmd_len - 3)) * 8);
+        else if (s->cmd_len < 5)
+            DPRINTF("zero byte\n");
+        else {
+            DPRINTF("data idx %u\n", s->cmd_len - 5);
+            s->buf1[s->cmd_len - 5] = val;
+        }
+        return 0;
+    case 0x81://page erase
+        ++s->cmd_len;
+        if (s->cmd_len >= 2 && s->cmd_len <= 4) {
+            s->addr |= (val & 0xFF) << ((4 - s->cmd_len) * 8);
+        }
+        if (s->cmd_len == 4) {
+            uint8_t *bytes = s->storage;
+            /*TODO: handle different page sizes*/
+            uint32_t addr = (s->addr >> 10) * DF_PAGE_SIZE + (s->addr & 0x3ff);
+            DPRINTF("we erase at %X\n", addr);
+            memset(&bytes[addr], 0xFF, DF_PAGE_SIZE);
+            if (bdrv_write(s->bs, (addr >> 9), bytes + (addr & ~(512 - 1)), (DF_PAGE_SIZE + 512-1) / 512) == -1)
+                printf("%s: write error\n", __FUNCTION__);
+        }
+        return 0;
+    case 0x88:
+        ++s->cmd_len;
+        if (s->cmd_len >= 2 && s->cmd_len <= 4) {
+            s->addr |= (val & 0xFF) << ((4 - s->cmd_len) * 8);
+        }
+        if (s->cmd_len == 4) {
+            uint8_t *bytes = s->storage;
+            /*TODO: handle different page sizes*/
+            uint32_t addr = (s->addr >> 10) * DF_PAGE_SIZE + (s->addr & 0x3ff);
+            DPRINTF("program addr %X from buf1\n", addr);
+            memcpy(&bytes[addr], s->buf1, DF_PAGE_SIZE);
+            if (bdrv_write(s->bs, (addr >> 9), bytes + (addr & ~(512 - 1)), (DF_PAGE_SIZE + 512-1) / 512) == -1)
+                printf("%s: write error\n", __FUNCTION__);
+        }
+        return 0;
     default:
-        DPRINTF("Unknown cmd\n");
+        DPRINTF("Unknown cmd: %X\n", s->cmd);
         return 0;
     }
 }
@@ -88,6 +135,7 @@ int spi_flash_register(BlockDriverState *bs, unsigned int len,
 
     spi_flash_reset_state(spi_flash);
     spi_flash->storage = qemu_malloc(len);
+    spi_flash->buf1 = qemu_malloc(BUF1_SIZE);
     spi_flash->len = len;
     spi_flash->bs = bs;
     if (spi_flash->bs) {
