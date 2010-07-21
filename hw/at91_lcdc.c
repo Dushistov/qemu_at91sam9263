@@ -32,7 +32,7 @@ typedef struct LCDCState {
     uint32_t dmabaddr1;
 } LCDCState;
 
-#define AT91_LCDC_DEBUG
+//#define AT91_LCDC_DEBUG
 #ifdef AT91_LCDC_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
