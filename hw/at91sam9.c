@@ -354,7 +354,7 @@ static void at91sam9_init(ram_addr_t ram_size,
             //rom
             cpu_register_physical_memory(0x0, 100 * 1024,
                                          sam9->bootrom | IO_MEM_ROMD);
-            nand_state = nand_init(NAND_MFR_MICRON, 0xba);
+            nand_state = nand_init(NAND_MFR_MICRON, 0xda);
             at91_nand_register(nand_state);
         } else {
             //nor flash
