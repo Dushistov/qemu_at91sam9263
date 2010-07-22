@@ -463,7 +463,7 @@ NANDFlashState *nand_init(int manf_id, int chip_id)
         s->page_shift = nand_flash_ids[s->chip_id].page_shift;
         s->erase_shift = nand_flash_ids[s->chip_id].erase_shift;
     }
-
+    printf("%s: page size %d\n", __func__, 1 << s->page_shift);
     switch (1 << s->page_shift) {
     case 256:
         nand_init_256(s);
@@ -471,7 +471,7 @@ NANDFlashState *nand_init(int manf_id, int chip_id)
     case 512:
         nand_init_512(s);
         break;
-    case 2048:
+    case 2048:      
         nand_init_2048(s);
         break;
     default:
@@ -482,6 +482,9 @@ NANDFlashState *nand_init(int manf_id, int chip_id)
     s->mem_oob = 1;
     if (s->bdrv && bdrv_getlength(s->bdrv) >=
                     (s->pages << s->page_shift) + (s->pages << s->oob_shift)) {
+        printf("bad page size: length %llu, data size %u, oob size %u\n",
+               bdrv_getlength(s->bdrv),
+               (s->pages << s->page_shift), (s->pages << s->oob_shift));
         pagesize = 0;
         s->mem_oob = 0;
     }
@@ -582,6 +585,8 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
         for (; i < page; i ++)
             if (bdrv_write(s->bdrv, i, iobuf, 1) == -1)
                 printf("%s: write error in sector %i\n", __FUNCTION__, i);
+            else
+                printf("erase page\n");
     } else {
         addr = PAGE_START(addr);
         page = addr >> 9;
@@ -590,13 +595,31 @@ static void glue(nand_blk_erase_, PAGE_SIZE)(NANDFlashState *s)
         memset(iobuf + (addr & 0x1ff), 0xff, (~addr & 0x1ff) + 1);
         if (bdrv_write(s->bdrv, page, iobuf, 1) == -1)
             printf("%s: write error in sector %i\n", __FUNCTION__, page);
-
         memset(iobuf, 0xff, 0x200);
         i = (addr & ~0x1ff) + 0x200;
+#if 0
         for (addr += ((PAGE_SIZE + OOB_SIZE) << s->erase_shift) - 0x200;
-                        i < addr; i += 0x200)
+             i < addr; i += 0x200) {
             if (bdrv_write(s->bdrv, i >> 9, iobuf, 1) == -1)
                 printf("%s: write error in sector %i\n", __FUNCTION__, i >> 9);
+        }
+#else
+        uint32_t  j = i;
+        int old_nb_sectors = 0;
+        
+        addr += ((PAGE_SIZE + OOB_SIZE) << s->erase_shift) - 0x200;
+
+        for (;j < addr; j += 0x200)
+            ++old_nb_sectors;
+
+        int nb_sectors = (addr - i + 0x200 - 1) / 0x200;
+        assert(nb_sectors == old_nb_sectors);
+        uint8_t *bufs = qemu_malloc(nb_sectors * 0x200);
+        memset(bufs, 0xff, nb_sectors * 0x200);
+        if (bdrv_write(s->bdrv, i >> 9, bufs, nb_sectors) == -1)
+                printf("%s: write error in sector %i\n", __FUNCTION__, i >> 9);
+        qemu_free(bufs);
+#endif
 
         page = i >> 9;
         if (bdrv_read(s->bdrv, page, iobuf, 1) == -1)
