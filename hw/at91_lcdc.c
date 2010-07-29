@@ -9,13 +9,15 @@
 
 #define LCDC_SIZE 0x100000
 
-#define LCDC_DMABADDR1 0x0
-#define LCDC_DMAFRMCFG 0x18
-#define LCDC_DMACON    0x1C
-#define LCDC_LCDCON1   0x800
-#define LCDC_LCDCON2   0x804
-#define LCDC_LCDFRMCFG 0x810
-#define LCDC_PWRCON    0x83C
+#define LCDC_DMABADDR1     0x0
+#define LCDC_DMAFRMCFG     0x18
+#define LCDC_DMACON        0x1C
+#define LCDC_LCDCON1       0x800
+#define LCDC_LCDCON2       0x804
+#define LCDC_LCDFRMCFG     0x810
+#define LCDC_PWRCON        0x83C
+#define LCDC_LUT_ENTRY_0   0xC00
+#define LCDC_LUT_ENTRY_255 0xFFC
 
 #define DMACON_DMAEN 1
 
@@ -30,9 +32,10 @@ typedef struct LCDCState {
     uint32_t lcdcon2;
     uint32_t lcdfrmcfg;
     uint32_t dmabaddr1;
+    uint16_t lut[256];    
 } LCDCState;
 
-//#define AT91_LCDC_DEBUG
+#define AT91_LCDC_DEBUG
 #ifdef AT91_LCDC_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
@@ -100,6 +103,11 @@ static void at91_lcdc_mem_write(void *opaque, target_phys_addr_t offset,
         qemu_console_resize(s->ds, ((value >> 21) & 0x7FF) + 1, (value & 0x7FF) + 1);
         s->lcdfrmcfg = value;
         break;
+    case LCDC_LUT_ENTRY_0 ... LCDC_LUT_ENTRY_255:
+        //only the first 16 bits used
+        s->lut[(offset - LCDC_LUT_ENTRY_0) / sizeof(uint32_t)] = value & 0xFFFF;
+        DPRINTF("lut[%u] = %X\n", (offset - LCDC_LUT_ENTRY_0) / sizeof(uint32_t), s->lut[(offset - LCDC_LUT_ENTRY_0) / sizeof(uint32_t)]);
+        break;
     default:
         DPRINTF("unsup. write\n");
     }
@@ -146,7 +154,8 @@ struct pixel16 {
 
 union pixel16u {
     struct pixel16 p;
-    uint8_t val[0];
+    uint8_t bytes[0];
+    uint16_t val;
 };
 
 
@@ -165,10 +174,10 @@ static void at91_lcdc_update_display(void *opaque)
     union pixel16u tmp16;
     unsigned int r, g, b;
 
-    DPRINTF("update begin\n");
+//    DPRINTF("update begin\n");
     if (!(s->dmacon & DMACON_DMAEN))
         return;
-    DPRINTF("update continue\n");
+//    DPRINTF("update continue\n");
     switch (bpp_idx) {
     case 0 ... 4:
         bpp = 1 << bpp_idx;
@@ -185,16 +194,19 @@ static void at91_lcdc_update_display(void *opaque)
         fprintf(stderr, "Unsupported pixel size: %d\n", bpp);
         return;
     }
+
     //int once = 0;
     for (y = 0; y < height; ++y) {        
         for (x = 0; x < width; ++x) {
             if (bpp == 8) {
                 cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp8.val, 1);
-                r = tmp8.p.r;
-                g = tmp8.p.g;
-                b = tmp8.p.b;
+
+                tmp16.val =  s->lut[tmp8.val];
+                r = tmp16.p.r;
+                g = tmp16.p.g;
+                b = tmp16.p.b;
             } else {
-                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp16.val[0], 2);
+                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp16.bytes[0], 2);
                 r = tmp16.p.r;
                 g = tmp16.p.g;
                 b = tmp16.p.b;
@@ -220,9 +232,10 @@ static void at91_lcdc_update_display(void *opaque)
                 color = rgb_to_pixel24(r, g, b);
                 break;
             case 32:
-                if (bpp == 8)
-                    color = rgb_to_pixel32((unsigned)r << 5, (unsigned)g << 5, (unsigned)b << 6);
-                else
+                if (bpp == 8) {
+                    color = rgb_to_pixel32bgr((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
+//                    DPRINTF("color %X\n", color);
+                } else
                     color = rgb_to_pixel32((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
                 break;
             default:
@@ -230,7 +243,7 @@ static void at91_lcdc_update_display(void *opaque)
             }
 
             d = ds_get_data(s->ds) + ds_get_linesize(s->ds) * y + q_bpp * x;
-            *d = color;
+            memcpy(d, &color, ds_get_bits_per_pixel(s->ds) / 8);
         }
     }
 
