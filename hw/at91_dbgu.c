@@ -28,7 +28,7 @@
 #include "qemu-char.h"
 #include "at91.h"
 
-/* #define DEBUG_DBGU */
+#define DEBUG_DBGU
 
 #define DBGU_SIZE       0x200
 
@@ -82,6 +82,7 @@ typedef struct DBGUState {
     uint8_t thr;
     uint16_t brgr;
     uint32_t fnr;
+    PDCState *pdc_state;
 } DBGUState;
 
 static void at91_dbgu_update_irq(DBGUState *s)
@@ -108,16 +109,24 @@ static void at91_dbgu_update_parameters(DBGUState *s)
 static void at91_dbgu_receive(void *opaque, const uint8_t *buf, int size)
 {
     DBGUState *s = opaque;
-
-    s->sr |= SR_RXRDY | SR_RXBUFF;
+#ifdef DEBUG_DBGU
+    printf("%s: recieve, size %d, char `%c'\n", __func__, size, size ? buf[0] : 0);
+#endif
+    s->sr |= SR_RXRDY/* | SR_RXBUFF*/;
     s->rhr = (buf[0] & 0xff);
-    at91_dbgu_update_irq(s);
+    if (at91_pdc_byte_in(s->pdc_state, buf[0] & 0xFF) == 0)
+        at91_dbgu_update_irq(s);
+    else
+        s->sr &= ~SR_RXRDY;
 }
 
 static int at91_dbgu_can_receive(void *opaque)
 {
     DBGUState *s = opaque;
-
+#if 0/*def DEBUG_DBGU*/
+    printf("%s: rx_en %d, rdy %d\n", __func__, s->rx_enabled,
+           !(s->sr & SR_RXRDY));
+#endif
     if (s->rx_enabled && !(s->sr & SR_RXRDY))
         return 1;
     return 0;
@@ -142,7 +151,7 @@ static uint32_t at91_dbgu_mem_read(void *opaque, target_phys_addr_t offset)
         return s->sr;
     case DBGU_RHR:
         value = s->rhr;
-        s->sr &= ~(SR_RXRDY | SR_RXBUFF);
+        s->sr &= ~(SR_RXRDY/* | SR_RXBUFF*/);
         at91_dbgu_update_irq(s);
         return value;
     case DBGU_BRGR:
@@ -153,6 +162,8 @@ static uint32_t at91_dbgu_mem_read(void *opaque, target_phys_addr_t offset)
         return s->chipid_ext;
     case DBGU_FNR:
         return s->fnr;
+    case 0x100 ... 0x124:
+        return at91_pdc_read(s->pdc_state, offset);
     default:
         return 0;
     }
@@ -206,6 +217,8 @@ static void at91_dbgu_mem_write(void *opaque, target_phys_addr_t offset,
     case DBGU_FNR:
         s->fnr = value;
         break;
+    case 0x100 ... 0x124:
+        at91_pdc_write(s->pdc_state, offset, value);
     default:
         return;
     }
@@ -217,14 +230,14 @@ static void at91_dbgu_mem_write(void *opaque, target_phys_addr_t offset,
 static uint32_t at91_dbgu_mem_read_dbg(void *opaque, target_phys_addr_t offset)
 {
     uint32_t value = at91_dbgu_mem_read(opaque, offset);
-    printf("%s offset=%x val=%x\n", __func__, offset, value);
+    printf("%s offset=%x val=%x\n", __func__, offset & (DBGU_SIZE - 1), value);
     return value;
 }
 
 static void at91_dbgu_mem_write_dbg(void *opaque, target_phys_addr_t offset,
                 uint32_t value)
 {
-    printf("%s offset=%x val=%x\n", __func__, offset, value);
+    printf("%s offset=%x val=%x\n", __func__, offset & (DBGU_SIZE - 1), value);
     at91_dbgu_mem_write(opaque, offset, value);
 }
 
@@ -247,7 +260,7 @@ static CPUWriteMemoryFunc *at91_dbgu_writefn[] = {
 static void at91_dbgu_save(QEMUFile *f, void *opaque)
 {
     DBGUState *s = opaque;
-
+//TODO: save pdc state
     qemu_put_byte(f, s->rx_enabled);
     qemu_put_byte(f, s->tx_enabled);
     qemu_put_be32(f, s->mr);
@@ -265,7 +278,7 @@ static int at91_dbgu_load(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id != 1)
         return -EINVAL;
-
+//TODO: load pdc state
     s->rx_enabled = qemu_get_byte(f);
     s->tx_enabled = qemu_get_byte(f);
     s->mr = qemu_get_be32(f);
@@ -293,13 +306,80 @@ static void at91_dbgu_reset(void *opaque)
     s->thr = 0;
     s->brgr = 0;
     s->fnr = 0;
+    at91_pdc_reset(s->pdc_state);
 }
+
+static int pdc_start_transfer(void *opaque,
+                              target_phys_addr_t tx,
+                              unsigned int *tx_len,
+                              target_phys_addr_t rx,
+                              unsigned int *rx_len,
+                              int last_transfer)
+{
+    DBGUState *s = opaque;
+    uint8_t tmp;
+    unsigned int i;
+#ifdef DEBUG_DBGU
+    printf("%s: begin, tx_len %u, rx_len %u\n", __func__, *tx_len, *rx_len);
+#endif
+    //TODO: implement recieving
+    if (*rx_len && *tx_len == 0) {
+        if (s->sr & SR_RXRDY)  {
+            tmp = s->rhr & 0xFF;
+            printf("%s: we save `%c' to %X\n", __func__, tmp, rx);
+            cpu_physical_memory_write(rx, &tmp, 1);
+            s->sr &= ~SR_RXRDY;
+            --*rx_len;
+            return 0;
+        } 
+        return -1;
+    }
+    for (i = 0; i < *tx_len; ++i) {
+        cpu_physical_memory_read(tx + i, &tmp, 1);
+        at91_dbgu_mem_write(s, DBGU_THR, tmp);
+    }
+    *tx_len = 0;
+
+    return 0;
+}
+
+static void pdc_state_changed(void *opaque, unsigned int state)
+{
+    DBGUState *s = opaque;
+
+#ifdef DEBUG_DBGU
+    printf("%s: begin\n", __func__);
+#endif
+    if (state & PDCF_ENDRX) {
+        printf("%s: clear rxdry\n", __func__);
+        s->sr |=  SR_ENDRX;
+//        s->sr &= ~(SR_RXRDY /*| SR_RXBUFF*/);
+    }
+    s->sr &= ~((state & PDCF_NOT_ENDRX) ? SR_ENDRX : 0);
+    s->sr |= (state & PDCF_ENDTX) ? SR_ENDTX : 0;
+    s->sr &= ~((state & PDCF_NOT_ENDTX) ? SR_ENDTX : 0);
+
+    s->sr |= (state & PDCF_RXFULL) ? SR_RXBUFF : 0;
+    s->sr &= ~((state & PDCF_NOT_RXFULL) ? SR_RXBUFF : 0);
+
+    s->sr |= (state & PDCF_TXFULL) ? SR_TXBUFE : 0;
+    s->sr &= ~((state & PDCF_NOT_TXFULL) ? SR_TXBUFE : 0);
+
+
+#ifdef DEBUG_DBGU
+    printf("%s: sr %X\n", __func__, s->sr);
+#endif
+
+    at91_dbgu_update_irq(s);
+}
+
 
 static void at91_dbgu_init(SysBusDevice *dev)
 {
     DBGUState *s = FROM_SYSBUS(typeof (*s), dev);
     int ser_regs;
 
+    s->pdc_state = at91_pdc_init(s, pdc_start_transfer, pdc_state_changed);
     sysbus_init_irq(dev, &s->irq);
     ser_regs = cpu_register_io_memory(at91_dbgu_readfn, at91_dbgu_writefn, s);
     sysbus_init_mmio(dev, DBGU_SIZE, ser_regs);

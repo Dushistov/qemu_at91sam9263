@@ -165,15 +165,15 @@ static void pdc_state_changed(void *opaque, unsigned int state)
 
 static int pdc_start_transfer(void *opaque,
                                target_phys_addr_t tx,
-                               unsigned int tx_len,
+                               unsigned int *tx_len,
                                target_phys_addr_t rx,
-                               unsigned int rx_len,
+                               unsigned int *rx_len,
                                int last_transfer)
 {
     SPIState *s = opaque;
     unsigned int i;
-    unsigned int tlen = rx_len > tx_len ? rx_len : tx_len;
-    int flags = ((tx_len > 0) ? 1 : 0) | ((rx_len > 0) ? 2 : 0);
+    unsigned int tlen = *rx_len > *tx_len ? *rx_len : *tx_len;
+    int flags = ((*tx_len > 0) ? 1 : 0) | ((*rx_len > 0) ? 2 : 0);
 
     DPRINTF("pdc: start transfer, last trans %d\n", last_transfer);
 #if 1
@@ -189,17 +189,17 @@ static int pdc_start_transfer(void *opaque,
     for (i = 0; i < tlen; ++i) {
         DPRINTF("pdc: transfering\n");
         uint8_t tmp = 0;
-        if (tx_len > 0) {
+        if (*tx_len > 0) {
             cpu_physical_memory_read(tx, &tmp, 1);
             ++tx;
-            --tx_len;
+            --*tx_len;
         }
         tmp = s->spi_control->txrx_callback(s->spi_control->opaque, tmp, 8);
         s->rdr = tmp;
-        if (rx_len > 0) {
+        if (*rx_len > 0) {
             cpu_physical_memory_write(rx, &tmp, 1);
             ++rx;
-            --rx_len;
+            --*rx_len;
         }
     }
 #if 0

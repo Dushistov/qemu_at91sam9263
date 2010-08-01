@@ -34,9 +34,9 @@ typedef uint32_t (*spi_txrx_callback_fun_t)(void *opaque, uint32_t cmd, int len)
 typedef struct PDCState PDCState;
 typedef int (*pdc_start_transfer_t)(void *opaque,
                                      target_phys_addr_t tx,
-                                     unsigned int tx_len,
+                                     unsigned int *tx_len,
                                      target_phys_addr_t rx,
-                                     unsigned int rx_len,
+                                     unsigned int *rx_len,
                                      int last_transfer);
 
 #define PDCF_ENDRX      1
@@ -55,6 +55,8 @@ PDCState *at91_pdc_init(void *opaque, pdc_start_transfer_t start_transfer,
 extern void at91_pdc_reset(PDCState *s);
 extern void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val);
 extern uint32_t at91_pdc_read(void *opaque, target_phys_addr_t offset);
+//return 1 if we handle receiption
+extern int at91_pdc_byte_in(PDCState *s, uint8_t data);
 
 struct NANDFlashState;
 extern void at91_nand_register(struct NANDFlashState *st);
