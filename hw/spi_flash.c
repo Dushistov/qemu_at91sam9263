@@ -53,17 +53,18 @@ static uint32_t spi_flash_txrx(void *opaque, uint32_t val, int len)
         s->cmd = val;        
         ++s->cmd_len;
         return 0;
-    case 0xE8:
+    case 0xE8://TODO: replace magic constants
         ++s->cmd_len;
         if (s->cmd_len >= 2 && s->cmd_len <= 4) {
             s->addr |= (val & 0xFF) << ((4 - s->cmd_len) * 8);
         } else if (s->cmd_len >= 5 && s->cmd_len < (5 + 4)) {
+            DPRINTF("addr is %X\n", s->addr);
             /*ignore bytes*/
         } else {
             uint8_t *bytes = s->storage;
             /*TODO: handle different page sizes*/
             uint32_t addr = (s->addr >> 10) * DF_PAGE_SIZE + (s->addr & 0x3ff);
-            DPRINTF("we read %X\n", bytes[addr + s->cmd_len - 9]);
+            DPRINTF("we read(offset %X) %X\n", addr + s->cmd_len - 9, bytes[addr + s->cmd_len - 9]);
 
             return bytes[addr + s->cmd_len - 9];
         }

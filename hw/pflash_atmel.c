@@ -209,6 +209,7 @@ static void pflash_update(pflash_t *pfl, int offset,
         /* round to sectors */
         offset = offset >> 9;
         offset_end = (offset_end + 511) >> 9;
+        //TODO: check return value?
         bdrv_write(pfl->bs, offset, pfl->storage + (offset << 9),
                    offset_end - offset);
     }
