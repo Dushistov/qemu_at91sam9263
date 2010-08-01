@@ -26,6 +26,17 @@
 #include "qemu-timer.h"
 #include "at91.h"
 
+//#define AT91_TC_DEBUG
+#ifdef AT91_TC_DEBUG
+#define DPRINTF(fmt, ...)                           \
+    do {                                            \
+        printf("AT91TC: " fmt , ## __VA_ARGS__);    \
+    } while (0)
+#else
+#define DPRINTF(fmt, ...) do { } while (0)
+#endif
+
+
 #define TC_SIZE         0x4000
 
 #define TC_CCR          0x00 /* Channel Control Register */
@@ -207,6 +218,9 @@ static uint32_t at91_tc_mem_read(void *opaque, target_phys_addr_t offset)
     TCState *s = opaque;
 
     offset &= TC_SIZE - 1;
+
+    DPRINTF("begin off %X\n", offset);
+
     switch (offset) {
     case TC_BMR:
         return 0; /* TODO */
@@ -227,7 +241,7 @@ static void at91_tc_mem_write(void *opaque, target_phys_addr_t offset,
     TCState *s = opaque;
 
     offset &= TC_SIZE - 1;
-
+    DPRINTF("write off %X, val %X\n", offset, value);
     switch (offset) {
     case TC_BCR:
         return; /* TODO */
@@ -242,6 +256,8 @@ static void at91_tc_mem_write(void *opaque, target_phys_addr_t offset,
     case 0x80 ... 0xbf:
         at91_tc_channel_write(&s->channels[2], offset - 0x80, value);
         break;
+    default:
+        DPRINTF("unsup write\n");
     }
 }
 
