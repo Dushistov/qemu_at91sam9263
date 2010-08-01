@@ -35,7 +35,7 @@ typedef struct LCDCState {
     uint16_t lut[256];    
 } LCDCState;
 
-#define AT91_LCDC_DEBUG
+//#define AT91_LCDC_DEBUG
 #ifdef AT91_LCDC_DEBUG
 #define DPRINTF(fmt, ...)                           \
     do {                                            \
@@ -206,7 +206,7 @@ static void at91_lcdc_update_display(void *opaque)
                 g = tmp16.p.g;
                 b = tmp16.p.b;
             } else {
-                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp16.bytes[0], 2);
+                cpu_physical_memory_read(s->dmabaddr1 + width * y * 2 + x * 2, &tmp16.bytes[0], 2);
                 r = tmp16.p.r;
                 g = tmp16.p.g;
                 b = tmp16.p.b;
@@ -234,9 +234,9 @@ static void at91_lcdc_update_display(void *opaque)
             case 32:
                 if (bpp == 8) {
                     color = rgb_to_pixel32bgr((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
-//                    DPRINTF("color %X\n", color);
-                } else
-                    color = rgb_to_pixel32((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
+                } else {
+                    color = rgb_to_pixel32bgr((unsigned)r << 3, (unsigned)g << 3, (unsigned)b << 3);
+                }
                 break;
             default:
                 return;
