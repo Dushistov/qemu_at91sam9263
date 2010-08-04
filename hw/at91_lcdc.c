@@ -100,7 +100,7 @@ static void at91_lcdc_mem_write(void *opaque, target_phys_addr_t offset,
         break;
      case LCDC_LCDFRMCFG:
         DPRINTF("lineval %u, linsize %u\n", value & 0x7FF, (value >> 21) & 0x7FF);
-        qemu_console_resize(s->ds, ((value >> 21) & 0x7FF) + 1, (value & 0x7FF) + 1);
+        qemu_console_resize(s->ds, ((value >> 21) & 0x7FF) + 1 + 2, (value & 0x7FF) + 1 + 2);
         s->lcdfrmcfg = value;
         break;
     case LCDC_LUT_ENTRY_0 ... LCDC_LUT_ENTRY_255:
@@ -199,14 +199,16 @@ static void at91_lcdc_update_display(void *opaque)
     for (y = 0; y < height; ++y) {        
         for (x = 0; x < width; ++x) {
             if (bpp == 8) {
-                cpu_physical_memory_read(s->dmabaddr1 + width * y + x, &tmp8.val, 1);
+                uint32_t dmabaddr1 = s->dmabaddr1 - 0x10000000;
+                cpu_physical_memory_read(dmabaddr1 + width * y + x, &tmp8.val, 1);
 
                 tmp16.val =  s->lut[tmp8.val];
                 r = tmp16.p.r;
                 g = tmp16.p.g;
                 b = tmp16.p.b;
             } else {
-                cpu_physical_memory_read(s->dmabaddr1 + width * y * 2 + x * 2, &tmp16.bytes[0], 2);
+                uint32_t dmabaddr1 = s->dmabaddr1 - 0x10000000;
+                cpu_physical_memory_read(dmabaddr1 + width * y * 2 + x * 2, &tmp16.bytes[0], 2);
                 r = tmp16.p.r;
                 g = tmp16.p.g;
                 b = tmp16.p.b;
@@ -242,12 +244,12 @@ static void at91_lcdc_update_display(void *opaque)
                 return;
             }
 
-            d = ds_get_data(s->ds) + ds_get_linesize(s->ds) * y + q_bpp * x;
+            d = ds_get_data(s->ds) + ds_get_linesize(s->ds) * (y + 1) + q_bpp * (x + 1);
             memcpy(d, &color, ds_get_bits_per_pixel(s->ds) / 8);
         }
     }
 
-    dpy_update(s->ds, 0, 0, width, height);
+    dpy_update(s->ds, 0, 0, width + 2, height + 2);
 }
 
 static void at91_lcdc_init(SysBusDevice *dev)
