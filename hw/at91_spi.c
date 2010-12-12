@@ -172,16 +172,21 @@ static int pdc_start_transfer(void *opaque,
 {
     SPIState *s = opaque;
     unsigned int i;
-    unsigned int tlen = *rx_len > *tx_len ? *rx_len : *tx_len;
-    int flags = ((*tx_len > 0) ? 1 : 0) | ((*rx_len > 0) ? 2 : 0);
+    unsigned int tlen;
+
 
     DPRINTF("pdc: start transfer, last trans %d\n", last_transfer);
 #if 1
-    if (flags == 2) {
+    if (tx_len == NULL) {
         DPRINTF("ignore only read request\n");
         return -1;
     }
 #endif
+    tlen = *tx_len;
+
+    if (rx_len != NULL) {
+        tlen = *rx_len > tlen ? *rx_len : tlen;
+    }
     /* suppose that transfer 8 bit,
        TODO: fix this, extract right value from csr
     */
@@ -189,33 +194,20 @@ static int pdc_start_transfer(void *opaque,
     for (i = 0; i < tlen; ++i) {
         DPRINTF("pdc: transfering\n");
         uint8_t tmp = 0;
-        if (*tx_len > 0) {
+        if (tx_len != NULL && *tx_len > 0) {
             cpu_physical_memory_read(tx, &tmp, 1);
             ++tx;
             --*tx_len;
         }
         tmp = s->spi_control->txrx_callback(s->spi_control->opaque, tmp, 8);
         s->rdr = tmp;
-        if (*rx_len > 0) {
+        if (rx_len != NULL && *rx_len > 0) {
             cpu_physical_memory_write(rx, &tmp, 1);
             ++rx;
             --*rx_len;
         }
     }
-#if 0
-    if (flags & 1) {//tx
-        s->sr |= SPI_SR_ENDTX;
-        if (last_transfer) {
-            s->sr |= SPI_SR_TXBUFE;
-        }
-    }
-    if (flags & 2) {//rx
-        s->sr |= SPI_SR_ENDRX;
-        if (last_transfer) {
-            s->sr |= SPI_SR_RXBUFF;
-        }
-    }
-#endif
+
     if (last_transfer) {        
         s->spi_control->set_chipselect(s->spi_control->opaque, 0);
     }

@@ -65,9 +65,13 @@ static void at91_pdc_work(PDCState *s, int last_transfer)
 {
     unsigned int state = 0;
 
+    DPRINTF("begin work\n");
     if ((s->ptsr & PDC_PTCR_RXTEN) || (s->ptsr & PDC_PTCR_TXTEN)) {
         unsigned was_rcr = s->rcr;
         unsigned was_tcr = s->tcr;
+        DPRINTF("start work: tcr %u, rcr %u\n", (s->ptsr & PDC_PTCR_TXTEN) ? s->tcr : 0, 
+                (s->ptsr & PDC_PTCR_RXTEN) ? s->rcr : 0);
+        
         int ret = s->start_transfer(s->opaque,
                                     s->tpr, (s->ptsr & PDC_PTCR_TXTEN) ? &s->tcr : 0,
                                     s->rpr, (s->ptsr & PDC_PTCR_RXTEN) ? &s->rcr : 0,
@@ -191,6 +195,7 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
             s->state_changed(s->opaque, PDCF_NOT_ENDRX | PDCF_NOT_RXFULL);
 #if 1
             if ((s->ptsr & PDC_PTCR_RXTEN)) {
+                DPRINTF("rcr start workn\n");
                 at91_pdc_work(s, 0);
             }
 #endif
@@ -201,6 +206,7 @@ void at91_pdc_write(void *opaque, target_phys_addr_t offset, uint32_t val)
         if (s->tcr != 0) {
             s->state_changed(s->opaque, PDCF_NOT_ENDTX | PDCF_NOT_TXFULL);
             if ((s->ptsr & PDC_PTCR_TXTEN)) {
+                DPRINTF("tcr start workn\n");
                 at91_pdc_work(s, 0);
             }
         }
