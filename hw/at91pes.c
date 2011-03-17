@@ -27,6 +27,10 @@
 #include "arm-misc.h"
 #include "sysemu.h"
 #include "net.h"
+#include "block.h"
+
+#define NOR_FLASH_ADDR 0x100000
+#define NOR_FLASH_SIZE 0x20000
 
 static void at91pes_init(ram_addr_t ram_size,
                       const char *boot_device,
@@ -44,6 +48,7 @@ static void at91pes_init(ram_addr_t ram_size,
     DeviceState *piob;
     DeviceState *pmc;
     DeviceState *pit;
+    DriveInfo *dinfo;
     uint32_t keys[] = {
             2 /* 1 */, 3 /* 2 */, 4 /* 3 */, 30 /* A */,
             5 /* 4 */, 6 /* 5 */, 7 /* 6 */, 48 /* B */,
@@ -62,7 +67,7 @@ static void at91pes_init(ram_addr_t ram_size,
 
     /* RAM at address zero. */
     ram_addr = qemu_ram_alloc(ram_size);
-    cpu_register_physical_memory(0, 0x100000, ram_addr | IO_MEM_RAM);
+    //cpu_register_physical_memory(0, 0x100000, ram_addr | IO_MEM_RAM);
     cpu_register_physical_memory(0x200000, ram_size, ram_addr | IO_MEM_RAM);
 
     cpu_pic = arm_pic_init_cpu(env);
@@ -117,12 +122,33 @@ static void at91pes_init(ram_addr_t ram_size,
     qdev_connect_gpio_out(dev, 0, qdev_get_gpio_in(piob, 22));
     qdev_connect_gpio_out(dev, 1, qdev_get_gpio_in(piob, 23));
 
-    at91pes_binfo.ram_size = ram_size;
-    at91pes_binfo.kernel_filename = kernel_filename;
-    at91pes_binfo.kernel_cmdline = kernel_cmdline;
-    at91pes_binfo.initrd_filename = initrd_filename;
-    at91pes_binfo.board_id = 0;
-    arm_load_kernel(env, &at91pes_binfo);
+    dinfo = drive_get(IF_PFLASH, 0, 0);
+    if (dinfo) {
+        int ret;
+        ram_addr_t nor_flash_mem = qemu_ram_alloc(NOR_FLASH_SIZE);
+        if (!nor_flash_mem) {
+            fprintf(stderr, "Can not allocate mem for NOR flash\n");
+            exit(EXIT_FAILURE);
+        }
+        ret = bdrv_read(dinfo->bdrv, 0, qemu_get_ram_ptr(nor_flash_mem), NOR_FLASH_SIZE >> 9);
+        if (ret < 0) {
+            fprintf(stderr, "Can not read flash content\n");
+            exit(EXIT_FAILURE);
+        }
+        
+        cpu_register_physical_memory(0, NOR_FLASH_SIZE,
+                                     nor_flash_mem  | IO_MEM_ROMD);
+        cpu_register_physical_memory(NOR_FLASH_ADDR, NOR_FLASH_SIZE,
+                                     nor_flash_mem | IO_MEM_ROMD);
+        env->regs[15] = NOR_FLASH_ADDR;
+    } else {
+        at91pes_binfo.ram_size = ram_size;
+        at91pes_binfo.kernel_filename = kernel_filename;
+        at91pes_binfo.kernel_cmdline = kernel_cmdline;
+        at91pes_binfo.initrd_filename = initrd_filename;
+        at91pes_binfo.board_id = 0;
+        arm_load_kernel(env, &at91pes_binfo);
+    }
 }
 
 static QEMUMachine at91pes_machine = {
