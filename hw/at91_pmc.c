@@ -26,6 +26,17 @@
 #include "qemu-timer.h"
 #include "at91.h"
 
+//#define AT91_PMC_DEBUG
+#ifdef AT91_PMC_DEBUG
+#define DPRINTF(fmt, ...)                           \
+    do {                                            \
+        printf("AT91PMC: " fmt , ## __VA_ARGS__);    \
+    } while (0)
+#else
+#define DPRINTF(fmt, ...) do { } while (0)
+#endif
+
+
 #define PMC_SIZE        0x70
 
 #define PMC_SCER        0x00 /* System Clock Enable Register */
@@ -126,7 +137,7 @@ static void at91_update_master_clock(PMCState *s)
 static uint32_t at91_pmc_mem_read(void *opaque, target_phys_addr_t offset)
 {
     PMCState *s = opaque;
-
+    DPRINTF("read %X\n", offset);
     switch (offset) {
     case PMC_PLLA:
         return s->plla;
@@ -145,12 +156,14 @@ static uint32_t at91_pmc_mem_read(void *opaque, target_phys_addr_t offset)
     case PMC_PCKR ... PMC_PCKR + 15:
         return s->pckr[(offset - PMC_PCKR) >> 2];
     case PMC_SR:
+        DPRINTF("read SR, val %X\n", s->sr);
         return s->sr;
     case PMC_IMR:
         return s->imr;
     case PMC_MCKR:
         return s->mckr;
     default:
+        DPRINTF("unsup. read\n");
         return 0;
     }
 }
@@ -159,7 +172,7 @@ static void at91_pmc_mem_write(void *opaque, target_phys_addr_t offset,
                 uint32_t value)
 {
     PMCState *s = opaque;
-
+    DPRINTF("set %X to %X\n", offset, value);
     switch (offset) {
     case PMC_SCER:
         s->scsr |= value & 0xf80;
@@ -177,15 +190,18 @@ static void at91_pmc_mem_write(void *opaque, target_phys_addr_t offset,
         /* Main Oscillator bypassing is not supported, so first two
            bits are ignored. Bits 8-15 specify the OSCOUNT, which is
            also currently ignored. */
+        DPRINTF("write to mor\n");
         s->mor = value;
         s->sr |= SR_MOSCS;
         break;
     case PMC_PLLA:
         s->plla = value;
         /* OUTA, PLLACOUNT ignored for now */
+        DPRINTF("set plla\n");
         s->sr |= SR_LOCKA;
         break;
     case PMC_PLLB:
+        DPRINTF("set pllb\n");
         s->pllb = value;
         /* OUTB, PLLBCOUNT ignored for now */
         s->sr |= SR_LOCKB;
@@ -203,6 +219,7 @@ static void at91_pmc_mem_write(void *opaque, target_phys_addr_t offset,
         s->imr &= ~value;
         break;
     default:
+        DPRINTF("unsup. write\n");
         return;
     }
 
