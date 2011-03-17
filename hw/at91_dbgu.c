@@ -28,7 +28,7 @@
 #include "qemu-char.h"
 #include "at91.h"
 
-#define DEBUG_DBGU
+//#define DEBUG_DBGU
 
 #define DBGU_SIZE       0x200
 

@@ -198,7 +198,7 @@ static uint32_t at91_periph_read(void *opaque, target_phys_addr_t offset)
     for (i = 0; i < ARRAY_SIZE(ip_blocks); ++i)
         if (offset >= ip_blocks[i].offset && offset < ip_blocks[i].end_offset)
             return ip_blocks[i].read_func(opaque, offset - ip_blocks[i].offset);
-    DEBUG("read from unsupported periph addr %X\n", offset);
+//    DEBUG("read from unsupported periph addr %X\n", offset);
     return 0xFFFFFFFFUL;
 }
 
@@ -212,7 +212,7 @@ static void at91_periph_write(void *opaque, target_phys_addr_t offset,
             ip_blocks[i].write_func(opaque, offset - ip_blocks[i].offset, value);
             return;
         }
-    DEBUG("write to unsupported periph: addr %X, val %X\n", offset, value);
+//    DEBUG("write to unsupported periph: addr %X, val %X\n", offset, value);
 }
 
 static CPUReadMemoryFunc *at91_periph_readfn[] = {
