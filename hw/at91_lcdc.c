@@ -80,6 +80,7 @@ static void at91_lcdc_mem_write(void *opaque, target_phys_addr_t offset,
 
     switch (offset) {
     case LCDC_DMABADDR1:
+        DPRINTF("dma addr %X\n", value);
         s->dmabaddr1 = value;
         break;
     case LCDC_PWRCON:
@@ -199,7 +200,7 @@ static void at91_lcdc_update_display(void *opaque)
     for (y = 0; y < height; ++y) {        
         for (x = 0; x < width; ++x) {
             if (bpp == 8) {
-                uint32_t dmabaddr1 = s->dmabaddr1 - 0x10000000;
+                uint32_t dmabaddr1 = s->dmabaddr1/* - 0x10000000*/;
                 cpu_physical_memory_read(dmabaddr1 + width * y + x, &tmp8.val, 1);
 
                 tmp16.val =  s->lut[tmp8.val];
@@ -207,7 +208,7 @@ static void at91_lcdc_update_display(void *opaque)
                 g = tmp16.p.g;
                 b = tmp16.p.b;
             } else {
-                uint32_t dmabaddr1 = s->dmabaddr1 - 0x10000000;
+                uint32_t dmabaddr1 = s->dmabaddr1/* - 0x10000000*/;
                 cpu_physical_memory_read(dmabaddr1 + width * y * 2 + x * 2, &tmp16.bytes[0], 2);
                 r = tmp16.p.r;
                 g = tmp16.p.g;
